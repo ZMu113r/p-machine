@@ -23,13 +23,18 @@ typedef struct instruction
 } instruction;
 
 // Instruction Fetch Cycle
-void Fetch()
-{
+int *Fetch(instruction *currentInstruction, int *IR)
+{	
+	IR[0] = currentInstruction->op;
+	IR[1] = currentInstruction->r;
+	IR[2] = currentInstruction->L;
+	IR[3] = currentInstruction->M;
 
+	return IR;
 }
 
 // Instruction Execute Cycle
-void Execute()
+void Execute(int *IR)
 {
 
 }
@@ -56,13 +61,24 @@ void print()
 
 int main(int argc, char **argv) 
 {	
+	char *buffer = (char *)malloc(sizeof(char) * 10);
+	int numInstructions = 0;
+	int *opcode = (int *)malloc(sizeof(int));
+	int *reg = (int *)malloc(sizeof(int));
+	int *lex = (int *)malloc(sizeof(int));
+	int *m = (int *)malloc(sizeof(int));
+	//Code register = Array of instructions
+	instruction **codeRegister = (instruction **)malloc(sizeof(instruction *) * numInstructions);
+	int index = 0;
+	int PC = 0;
+	
+
+
 	//Get file from command line and open it
 	char *filename = argv[1];
 	FILE *file = fopen(filename, "r");
 	
 	//Run through file once to count instructions then rewind
-	char *buffer = (char *)malloc(sizeof(char) * 10);
-	int numInstructions = 0;
 	while(fscanf(file, "%s", buffer) != EOF)
 	{	
 		numInstructions++;
@@ -71,13 +87,6 @@ int main(int argc, char **argv)
 	numInstructions /= 4;
 
 	
-	int *opcode = (int *)malloc(sizeof(int));
-	int *reg = (int *)malloc(sizeof(int));
-	int *lex = (int *)malloc(sizeof(int));
-	int *m = (int *)malloc(sizeof(int));
-	//Array of instructions
-	instruction **array = (instruction **)malloc(sizeof(instruction *) * numInstructions);
-	int index = 0;
 	//run through file and put instructions into
 	//appropritate struct fields
 	while(fscanf(file, "%d %d %d %d", opcode, reg, lex, m) != EOF)
@@ -89,11 +98,22 @@ int main(int argc, char **argv)
 		inst->L = *lex;
 		inst->M = *m;
 		
-		//Put new instruction into array of structures
-		array[index] = inst;
-		printf("op = %d  r = %d  l = %d  m = %d  \n", array[index]->op, array[index]->r, array[index]->L, array[index]->M);
+		//Put new instruction into code register
+		codeRegister[index] = inst;
+		//printf("op = %d  r = %d  l = %d  m = %d  \n", array[index]->op, array[index]->r, array[index]->L, array[index]->M);
 		index++;
 	}
 
+	while(PC < numInstructions)
+	{	
+		//Instruction Register 
+		//Holds currently fetched instruction
+		int *IR = (int *)malloc(sizeof(int) * 4);
+
+		// Call instruction fetch on instruction where
+		// the program counter is pointing
+		Fetch(codeRegister[PC], IR);
+		Execute(IR);
+	}
 	return 0;
 } 
