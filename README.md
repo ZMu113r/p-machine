@@ -8,10 +8,12 @@ A virtual machine simulating a compiler
 4. 
 
 How to compile and run each part:
+
 1. p-machine:
   - Go to Terminal/Command Prompt
   - type "gcc p-machine.c" to complile
   - type "./a.out input_file.txt" to run
+  
  2. Scanner
   - Go to Terminal/Command Prompt
   - type "gcc Scanner.c" to complile
