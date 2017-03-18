@@ -34,6 +34,7 @@ typedef struct temporary
 
 //gonna define all procedures here to allow the reader to wrap their mind around what I'm doing
 //also avoid implicit declaration:)
+void error(int errNum);
 struct Node* createNode(Symbol s);
 Symbol *createSymbol(int kind, char *name, int val, int level, int addr);
 struct Node *insertNode(Symbol sym, struct Node *head);
@@ -66,6 +67,88 @@ int addr;
 int test;
 temp temp_Val;
 FILE *file;
+
+// A neat function for error printing
+void error(int errNum)
+{
+    switch(errNum)
+    {
+        case 1:
+            printf("Error 1: File Not Found.\n");
+            break;
+
+        case 2:
+            printf("Error 2: Period Missing.\n");
+            break;
+
+        case 3:
+            printf("Error 3: Identifier Missing.\n");
+            break;
+
+        case 4:
+            printf("Error 4: Equal Sign Missing\n");
+            break;
+
+        case 5:
+            printf("Error 5: Number Missing For Constant Declaration.\n");
+            break;
+
+        case 6:
+            printf("Error 6: Semicolon Missing For Constant Declaration.\n");
+            break;
+
+        case 7:
+            printf("Error 7: Semicolon Missing For Integer Declaration.\n");
+            break;
+
+        case 8:
+            printf("Error 8: Identifier Missing For Procedure Declaration.\n");
+            break;
+
+        case 9:
+            printf("Error 9: Semicolon Missing For Procedure Declaration.\n");
+            break;
+
+        case 10:
+            printf("Error 10: Semicolon Missing For Procedure Declaration.\n");
+            break;
+
+        case 11:
+            printf("Error 11: Becomes Symbol Is Missing.\n");
+            break;
+
+        case 12:
+            printf("Error 12: Identifier Missing After Call.\n");
+            break;
+
+        case 13:
+            printf("Error 13: End Symbol Missing From Statement.\n");
+            break;
+
+        case 14:
+            printf("Error 14: Missing Preceding then After If.\n");
+            break;
+
+        case 15:
+            printf("Error 15: Missing do After while.\n");
+            break;
+
+        case 16:
+            printf("Error 16: Identifier Missing for Integer Declaration.\n");
+            break;
+
+        case 17:
+            printf("Error 17: Missing Closing Parenthesis.\n");
+            break;
+
+        case 18:
+            break;
+
+        case 19:
+            printf("Error 19: The variable has already been declared.\n");
+            break;
+    }
+}
 
 //creates a Node and returns it
 struct Node *createNode(Symbol s)
