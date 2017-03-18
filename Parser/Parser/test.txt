@@ -1,0 +1,1 @@
+constsym identsym x eqsym numbersym 10 semicolonsym varsym identsym y semicolonsym beginsym identsym y becomessym identsym x plussym numbersym 2 semicolonsym endsym periodsym
