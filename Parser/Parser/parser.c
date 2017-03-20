@@ -75,77 +75,96 @@ void error(int errNum)
     {
         case 1:
             printf("Error 1: File Not Found.\n");
+            exit(1);
             break;
 
         case 2:
             printf("Error 2: Period Missing.\n");
+            exit(2);
             break;
 
         case 3:
             printf("Error 3: Identifier Missing.\n");
+            exit(3);
             break;
 
         case 4:
             printf("Error 4: Equal Sign Missing\n");
+            exit(4);
             break;
 
         case 5:
             printf("Error 5: Number Missing For Constant Declaration.\n");
+            exit(5);
             break;
 
         case 6:
             printf("Error 6: Semicolon Missing For Constant Declaration.\n");
+            exit(6);
             break;
 
         case 7:
             printf("Error 7: Semicolon Missing For Integer Declaration.\n");
+            exit(7);
             break;
 
         case 8:
             printf("Error 8: Identifier Missing For Procedure Declaration.\n");
+            exit(8);
             break;
 
         case 9:
             printf("Error 9: Semicolon Missing For Procedure Declaration.\n");
+            exit(9);
             break;
 
         case 10:
             printf("Error 10: Semicolon Missing For Procedure Declaration.\n");
+            exit(10);
             break;
 
         case 11:
             printf("Error 11: Becomes Symbol Is Missing.\n");
+            exit(11);
             break;
 
         case 12:
             printf("Error 12: Identifier Missing After Call.\n");
+            exit(12);
             break;
 
         case 13:
             printf("Error 13: End Symbol Missing From Statement.\n");
+            exit(13);
             break;
 
         case 14:
             printf("Error 14: Missing Preceding then After If.\n");
+            exit(14);
             break;
 
         case 15:
             printf("Error 15: Missing do After while.\n");
+            exit(15);
             break;
 
         case 16:
             printf("Error 16: Identifier Missing for Integer Declaration.\n");
+            exit(16);
             break;
 
         case 17:
             printf("Error 17: Missing Closing Parenthesis.\n");
+            exit(17);
             break;
 
         case 18:
+            exit(18);
             break;
 
         case 19:
             printf("Error 19: The variable has already been declared.\n");
+            exit(19);
             break;
     }
 }
