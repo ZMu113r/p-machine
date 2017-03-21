@@ -68,6 +68,7 @@ int test;
 temp temp_Val;
 FILE *file;
 
+
 // A neat function for error printing
 void error(int errNum)
 {
@@ -612,6 +613,29 @@ void statement()
     }
 
 
+}
+
+void convertToAssembly(int OP, int reg, int L, int M)
+{
+    if(instruction > 499)
+        error(21);
+    
+    instructions[instructionCount].OP = OP;
+    instructions[instructionCount].reg = reg;
+    instructions[instructionCount].L = L;
+    instructions[instructionCount].M = M;
+    
+    instructionCount++;
+}
+
+void printAssembly(char *argv[])
+{
+    File *file = fopen(argv[2], "w");
+    
+    for(int i = 0; i < instructionCount; i++)
+        printf("%d %d %d %d\n", instructions[instructionCount].OP, instructions[instructionCount].reg, instructions[instructionCount].L, instructions[instructionCount].M);
+    
+    fclose(file);
 }
 
 //if correct, inserts the declaration into the symbol table
