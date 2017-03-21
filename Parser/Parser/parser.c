@@ -32,6 +32,16 @@ typedef struct temporary
     char ident[11];
 } temp;
 
+typedef struct token
+{
+    char name[11];
+    int id;
+    char sym_name[20];
+    int val;
+    char *var_name[11];
+} token;
+
+
 //gonna define all procedures here to allow the reader to wrap their mind around what I'm doing
 //also avoid implicit declaration:)
 void error(int errNum);
@@ -42,10 +52,10 @@ int compareSymbols(Symbol s1, Symbol s2);
 int destroyNode(Symbol s, struct Node *head);
 void getNextToken();
 unsigned int hashValue(char *str, unsigned int len);
-int lookUp(int kind, char *name, int value, int level, int addr);
+int lookUp(char *name);
 void insertHash(int kind, char *name, int value, int level, int addr);
 void factor();
-int term();
+void term();
 void expression();
 void condition();
 void statement();
@@ -56,18 +66,16 @@ void block();
 void program();
 void readFile();
 
-
-
 //needed global variables for all functions
-char token [11];
+char cur_token [11];
 const unsigned int MAX_SYMBOLS = 10000;
 struct hash symbol_table[10000];
 struct Node insertingNode;
 int addr;
 int test;
 temp temp_Val;
-FILE *file;
-
+FILE *scanner_input, *parser_input, *virtual_input, *output;
+token tokens[9999];
 
 // A neat function for error printing
 void error(int errNum)
@@ -170,6 +178,445 @@ void error(int errNum)
     }
 }
 
+void convertToAssembly(int OP, int reg, int L, int M)
+{
+    if(instruction > 499)
+        error(21);
+
+    instructions[instructionCount].OP = OP;
+    instructions[instructionCount].reg = reg;
+    instructions[instructionCount].L = L;
+    instructions[instructionCount].M = M;
+
+    instructionCount++;
+}
+
+void printAssembly()
+{
+    for(int i = 0; i < instructionCount; i++)
+        printf("%d %d %d %d\n", instructions[instructionCount].OP, instructions[instructionCount].reg, instructions[instructionCount].L, instructions[instructionCount].M);
+
+}
+
+void printFile(){
+    printf("Source:\n");
+    FILE *file = fopen("input.txt", "r");
+
+    char temp;
+
+    temp = fgetc(file);
+    while(temp != EOF) {
+        printf("%c", temp);
+        temp = fgetc(file);
+    }
+
+    printf("\n\nLexeme\tToken Type\n");
+    fclose(file);
+}
+
+int checkSpecial(char specialChar[], char c)
+{
+    for(int i = 0; i < 13; i++)
+        if(c == specialChar[i])
+            return 1;
+
+    return 0;
+
+}
+
+int contains(char c, char alpha[])
+{
+    for(int i = 0; i < strlen(alpha); i++)
+    {
+        if(c == alpha[i])
+            return 1;
+    }
+
+    return 0;
+}
+
+int process(char specialChar[], FILE *file, char digits[], char letters[])
+{
+    //declare things we will use in this function
+    char c1, c2;
+    char str[12];
+    int i, j;
+    int in_comment = 0;
+    //lets initialize this string
+    //initializeString(str);
+    //for(int i = 0; i < 200; i++)
+    strcpy(str, "");
+
+    //now scan in the first two characters
+    c1 = fgetc(file);
+    c2 = fgetc(file);
+
+    //outer loop focuses on the checker character
+    for(i = 0; c1 != EOF;){
+
+        //inner loop focuses on building the token strings
+        for(j = 0; !checkSpecial(specialChar, c2) && c2 != ' ' && c2 != '\n';){
+
+            //the case where the user is stupid and puts too long of
+            //a string
+            if(j == 11 && (contains(str[0], digits) || contains(str[0], letters) || contains(str[0], specialChar))){
+                printf("The string %s is too long to process, please revisit your code.", str);
+                exit(2);
+            }
+
+            if(checkSpecial(specialChar, c1))
+                break;
+
+            //printf("before c1 = (%c)\n", c1);
+            //append the character to the string if its not a space
+            if(c1 != ' ' && c1 != '\t' && c1 != '\n'){
+                //printf("Here!!!\n");
+                str[j] = c1;
+                str[j+1] = '\0';
+                j++;
+            }
+
+            //now let c1 be equal to the checker character
+            c1 = c2;
+
+            //read the next character
+            c2 = fgetc(file);
+
+            if(c1 == EOF)
+                break;
+        }
+
+        if(c1 != ' ' && c1 != '\t' && c1 != '\n'){
+            str[j] = c1;
+        }
+
+        if( ( checkSpecial(specialChar, c2) && checkSpecial(specialChar, c1) ) && ( c1 == ':' || c1 == '<' || c1 == '>'))
+        {
+
+                c1 = c2;
+                c2 = fgetc(file);
+
+                if(checkSpecial(specialChar, c1)){
+                    j++;
+                    str[j] = c1;
+                }
+        }
+
+        str[j+1] = '\0';
+
+        if(str[0] == '/' && str[1] == '*')
+            in_comment = 1;
+
+        if(!in_comment)
+            if(contains(str[0], digits) || contains(str[0], letters) || contains(str[0], specialChar))
+                strcpy(tokens[i++].name, str);
+
+        if(str[1] == '/' && str[0] == '*')
+            in_comment = 0;
+
+        c1 = c2;
+        c2 = fgetc(file);
+
+        //reset the string
+        strcpy(str, "");
+
+        //now read in the next character
+
+    }
+
+    return i;
+
+}
+
+void printTokens(int len)
+{
+    for(int i = 0; i < len ; i++)
+        printf("%s\t%d\t\n", tokens[i].name, tokens[i].id);
+}
+
+void tokenCheck(int length, char digits[], char letters[])
+{
+
+    int var_flag = 0, dig_flag = 0;
+
+    for(int i = 0; i < length; i++)
+    {
+        if(strcmp(tokens[i].name, "null") == 0)
+        {
+            tokens[i].id = 1;
+            strcpy(tokens[i].sym_name, "nulsym ");
+        }
+
+        else if(strcmp(tokens[i].name, "+") == 0)
+        {
+            tokens[i].id = 4;
+            strcpy(tokens[i].sym_name, "plussym ");
+        }
+
+        else if(strcmp(tokens[i].name, "-") == 0)
+        {
+            tokens[i].id = 5;
+            strcpy(tokens[i].sym_name, "minussym ");
+        }
+
+        else if(strcmp(tokens[i].name, "*") == 0)
+        {
+            tokens[i].id = 6;
+            strcpy(tokens[i].sym_name, "multsym ");
+        }
+
+        else if(strcmp(tokens[i].name, "/") == 0)
+        {
+            tokens[i].id = 7;
+            strcpy(tokens[i].sym_name, "slashsym ");
+        }
+
+        else if(strcmp(tokens[i].name, "odd") == 0)
+        {
+            tokens[i].id = 8;
+            strcpy(tokens[i].sym_name, "oddsym ");
+        }
+
+        else if(strcmp(tokens[i].name, "=") == 0)
+        {
+            tokens[i].id = 9;
+            strcpy(tokens[i].sym_name, "eqsym ");
+        }
+
+        else if(strcmp(tokens[i].name, "<>") == 0)
+        {
+            tokens[i].id = 10;
+            strcpy(tokens[i].sym_name, "neqsym ");
+        }
+
+        else if(strcmp(tokens[i].name, "<") == 0)
+        {
+            tokens[i].id = 11;
+            strcpy(tokens[i].sym_name, "lessym ");
+        }
+
+        else if(strcmp(tokens[i].name, "<=") == 0)
+        {
+            tokens[i].id = 12;
+            strcpy(tokens[i].sym_name, "leqsym ");
+        }
+
+        else if(strcmp(tokens[i].name, ">") == 0)
+        {
+            tokens[i].id = 13;
+            strcpy(tokens[i].sym_name, "gtrsym ");
+        }
+
+        else if(strcmp(tokens[i].name, ">=") == 0)
+        {
+             tokens[i].id = 14;
+             strcpy(tokens[i].sym_name, "geqsym ");
+        }
+
+        else if(strcmp(tokens[i].name, "(") == 0)
+        {
+            tokens[i].id = 15;
+            strcpy(tokens[i].sym_name, "lparentsym ");
+        }
+
+        else if(strcmp(tokens[i].name, ")") == 0)
+        {
+            tokens[i].id = 16;
+            strcpy(tokens[i].sym_name, "rparentsym ");
+        }
+
+        else if(strcmp(tokens[i].name, ",") == 0)
+        {
+            tokens[i].id = 17;
+            strcpy(tokens[i].sym_name, "commasym ");
+        }
+
+        else if(strcmp(tokens[i].name, ";") == 0)
+        {
+            tokens[i].id = 18;
+            strcpy(tokens[i].sym_name, "semicolonsym ");
+        }
+
+        else if(strcmp(tokens[i].name, ".") == 0)
+        {
+            tokens[i].id = 19;
+            strcpy(tokens[i].sym_name, "periodsym ");
+        }
+
+        else if(strcmp(tokens[i].name, ":=") == 0)
+        {
+            tokens[i].id = 20;
+            strcpy(tokens[i].sym_name, "becomessym ");
+        }
+
+        else if(strcmp(tokens[i].name, "begin") == 0)
+        {
+            tokens[i].id = 21;
+            strcpy(tokens[i].sym_name, "beginsym ");
+        }
+
+        else if(strcmp(tokens[i].name, "end") == 0)
+        {
+            tokens[i].id = 22;
+            strcpy(tokens[i].sym_name, "endsym ");
+        }
+
+        else if(strcmp(tokens[i].name, "if") == 0)
+        {
+            tokens[i].id = 23;
+            strcpy(tokens[i].sym_name, "ifsym ");
+        }
+
+        else if(strcmp(tokens[i].name, "then") == 0)
+        {
+            tokens[i].id = 24;
+            strcpy(tokens[i].sym_name, "thensym ");
+        }
+
+        else if(strcmp(tokens[i].name, "while") == 0)
+        {
+            tokens[i].id = 25;
+            strcpy(tokens[i].sym_name, "whilesym ");
+        }
+
+        else if(strcmp(tokens[i].name, "do") == 0)
+        {
+            tokens[i].id = 26;
+            strcpy(tokens[i].sym_name, "dosym ");
+        }
+
+        else if(strcmp(tokens[i].name, "call") == 0)
+        {
+            tokens[i].id = 27;
+            strcpy(tokens[i].sym_name, "callsym ");
+        }
+
+        else if(strcmp(tokens[i].name, "const") == 0)
+        {
+            tokens[i].id = 28;
+            strcpy(tokens[i].sym_name, "constsym ");
+        }
+
+        else if(strcmp(tokens[i].name, "var") == 0)
+        {
+             tokens[i].id = 29;
+             strcpy(tokens[i].sym_name, "varsym ");
+        }
+
+        else if(strcmp(tokens[i].name, "procedure") == 0)
+        {
+            tokens[i].id = 30;
+            strcpy(tokens[i].sym_name, "procsym ");
+        }
+
+        else if(strcmp(tokens[i].name, "write") == 0)
+        {
+            tokens[i].id = 31;
+            strcpy(tokens[i].sym_name, "writesym ");
+        }
+
+        else if(strcmp(tokens[i].name, "read") == 0)
+        {
+             tokens[i].id = 32;
+             strcpy(tokens[i].sym_name, "readsym ");
+        }
+
+        else if(strcmp(tokens[i].name, "else") == 0)
+        {
+            tokens[i].id = 33;
+            strcpy(tokens[i].sym_name, "elsesym ");
+        }
+
+
+        else{
+            //printf("Token: %s\tSize: %d\tFunction: %d\tCharacter: %c\n", tokens[i].name, strlen(tokens[i].name),
+                   //contains(tokens[i].name[0], letters), tokens[i].name[0]);
+            if(contains(tokens[i].name[0], letters))
+            {
+                for(int i = 1; i < strlen(tokens[i].name); i++)
+                {
+
+                    if(strlen(tokens[i].name) > 11)
+                    {
+                        printf("The variable %s is too long.\n", tokens[i].name);
+                        exit(1);
+                    }
+
+                    if(!contains(tokens[i].name[i], digits) && !contains(tokens[i].name[i], letters))
+                        var_flag = 1;
+                }
+
+                if(!var_flag)
+                {
+                    tokens[i].id = 2;
+                    strcpy(tokens[i].sym_name, "identsym ");
+                }
+
+            }
+
+            else if(contains(tokens[i].name[0], digits))
+            {
+                if(strlen(tokens[i].name) > 5)
+                {
+                    printf("The number %s is too long.\n", tokens[i].name);
+                    exit(1);
+                }
+                for(int i = 1; i < strlen(tokens[i].name); i++)
+                {
+                    if(!contains(tokens[i].name[i], digits) && strlen(tokens[i].name) <= 5)
+                        dig_flag = 1;
+
+
+                }
+
+                if(!dig_flag)
+                {
+                    tokens[i].id = 3;
+                    strcpy(tokens[i].sym_name, "numbersym ");
+                }
+
+            }
+
+            else
+            {
+                printf("Token %s is not found.\n", tokens[i].name);
+                exit(1);
+            }
+
+            if(var_flag || dig_flag)
+            {
+                printf("Token %s is not found.\n", tokens[i].name);
+                exit(1);
+            }
+
+        }
+
+    }
+}
+
+void print_list(int size)
+{
+    printf("\nLexeme List:\n");
+
+    for(int i = 0; i < size; i++)
+    {
+        if(tokens[i].id == 2)
+            printf("%d %s ", tokens[i].id, tokens[i].name);
+        else
+            printf("%d ", tokens[i].id);
+    }
+
+    printf("\n");
+}
+
+//returns 0 if relation is not found, and 1 if it is found
+int checkRelations(char* str)
+{
+    if(strcmp(str, "eqsym") == 0)
+    {
+        return 1;
+    }
+}
 //creates a Node and returns it
 struct Node *createNode(Symbol s)
 {
@@ -223,13 +670,14 @@ struct Node *insertNode(Symbol sym, struct Node *head)
     //use temp
     struct Node *temp = createNode(sym);
 
+    //is there a head?
     if(!head)
         return temp;
 
-
-
+    //update the head of the list
     temp->next = head;
 
+    //return this temp
     return temp;
 }
 
@@ -305,29 +753,17 @@ int destroyNode(Symbol s, struct Node *head)
 //this read the next token in the output
 void getNextToken()
 {
+    fscanf(parser_input, "%s", &cur_token);
 
-    fscanf(file, "%s", &token);
-    printf("Token = %s\n", token);
+    printf("Token = %s\n", cur_token);
 
     //scans next token as the identifier name
-    if(strcmp(token, "identsym") == 0)
-    {
-        fscanf(file, "%s", &temp_Val.ident);
-        printf("WE ARE HERE(1)\n");
-    }
-
+    if(strcmp(cur_token, "identsym") == 0)
+        fscanf(parser_input, "%s", &temp_Val.ident);
 
     //scans the number into the identifier value
-    else if(strcmp(token, "numbersym") == 0)
-    {
-
-        fscanf(file, "%d", &temp_Val.val);
-
-        printf("WE ARE HERE,IDENT = %s\n", temp_Val.ident);
-        printf("DONE (2): %d\n", temp_Val.val);
-    }
-
-
+    else if(strcmp(cur_token, "numbersym") == 0)
+        fscanf(parser_input, "%d", &temp_Val.val);
 
 }
 
@@ -355,12 +791,10 @@ unsigned int hashValue(char *str, unsigned int len)
 
 //looks up the node to see if it is in the symbol_table
 //returns 0 if we found it, -1 otherwise
-int lookUp(int kind, char *name, int value, int level, int addr)
+int lookUp(char *name)
 {
-
-    Symbol sym = *createSymbol(kind, name, value, level, addr);
     //find the hash value
-    int hash_val = hashValue(sym.name, strlen(sym.name));
+    int hash_val = hashValue(name, strlen(name));
 
     //make a temp
     struct Node *temp = symbol_table[hash_val].head;
@@ -370,7 +804,7 @@ int lookUp(int kind, char *name, int value, int level, int addr)
         return -1;
 
     //check through the list at that position for the node
-    while(compareSymbols(temp->sym, sym) != 0)
+    while(strcmp(temp->sym.name, name) != 0)
     {
         temp = temp->next;
 
@@ -378,19 +812,56 @@ int lookUp(int kind, char *name, int value, int level, int addr)
         if(temp == NULL)
             return -1;
 
-
     }
-
     //otherwise we found it
     return 0;
 }
 
+//this looks up a particular symbol and returns it
+struct Node *lookUpSym(char *name)
+{
+    //will need this node to loop through
+    struct Node *temp;
+
+    //error if we don't find the it all
+    if(lookUp(name) < 0)
+    {
+        printf("Error 18: Declaration Missing For %s\n", name);
+        exit(18);
+    }
+
+    //hash the name
+    int hash = hashValue(name, strlen(name));
+
+    //initialize the temp to the head of the list
+    temp = symbol_table[hash].head;
+
+    //iterate through the linked list until we find a match
+    while(strcmp(temp->sym.name, name) != 0)
+        temp = temp->next;
+
+    //return that symbol
+    return temp;
+}
+
+//this inserts a symbol into the symbol table (which is really a hash table)
 void insertHash(int kind, char *name, int value, int level, int addr)
 {
+    //create the symbol
     Symbol sym = *createSymbol(kind, name, value, level, addr);
 
+    //hash the value of the name we are trying to find
     int hash = hashValue(sym.name, strlen((sym.name)));
 
+    //check to see if that ident has been inserted already
+    if(lookUp(name) == 0)
+    {
+        printf("Error 19: %s has already been declared.\n", name);
+        exit(19);
+    }
+
+
+    //insert into list
     symbol_table[hash].head = insertNode(sym, symbol_table[hash].head);
 
     printf("Insert Complete.\n");
@@ -398,19 +869,16 @@ void insertHash(int kind, char *name, int value, int level, int addr)
 
 void factor()
 {
-    printf("Current token(5): %s\n", token);
-
     //check for identifier
-    if(strcmp(token, "identsym") == 0)
+    if(strcmp(cur_token, "identsym") == 0)
         getNextToken();
 
-
     //check for number
-    else if(strcmp(token, "numbersym") == 0)
+    else if(strcmp(cur_token, "numbersym") == 0)
         getNextToken();
 
     //check for '('
-    else if(strcmp(token, "(") != 0)
+    else if(strcmp(cur_token, "lparentsym") == 0)
     {
         getNextToken();
 
@@ -418,7 +886,7 @@ void factor()
         expression();
 
         //next token has to be the closing parenthesis
-        if(strcmp(token, ")") != 0)
+        if(strcmp(cur_token, "rparentsym") != 0)
         {
             printf("Error 17: Missing Closing Parenthesis.\n");
             exit(17);
@@ -428,43 +896,42 @@ void factor()
     }
 }
 
-int term()
+void term()
 {
     factor();
 
     //keep looping when multiplying or dividing
-    while(strcmp(token, "multsym") == 0 || strcmp(token, "slashsym") == 0)
+    while(strcmp(cur_token, "multsym") == 0 || strcmp(cur_token, "slashsym") == 0)
     {
         getNextToken();
-
-        //continually call factor
         factor();
     }
+
 }
 
 void expression()
 {
+    //if we start with a plus or minus, then get the next token
+    if(strcmp(cur_token, "plussym") == 0 || strcmp(cur_token, "minussym") == 0)
+        getNextToken();
+
     //call the term for the expression
     term();
 
-    //if current term is plus or minus
-    if(strcmp(token, "plussym") == 0 || strcmp(token, "minussym") == 0)
+    //keep looping when adding or subtracting
+    while(strcmp(cur_token, "plussym") == 0 || strcmp(cur_token, "minussym") == 0)
     {
-        //keep looping when adding or subtracting
-        while(strcmp(token, "plussym") == 0 || strcmp(token, "minussym") == 0)
-        {
-            getNextToken();
-
-            //call term for all
-            term();
-        }
+        getNextToken();
+        term();
     }
+
 }
 
+//condition returns 0 if false and 1 if true
 void condition()
 {
     //current token is the odd symbol
-    if(strcmp(token, "oddsym") == 0)
+    if(strcmp(cur_token, "oddsym") == 0)
     {
         getNextToken();
 
@@ -477,65 +944,99 @@ void condition()
         //call expression
         expression();
 
-        //figure it out sooner or later
-        //if(strcmp(token, "RELATION") != 0)
-        //{
-            //printf("Error 16: Relation Is Missing.\n");
-            //exit(16);
-        //}
 
-        getNextToken();
+        if(strcmp(cur_token, "eqsym") == 0)
+        {
+            getNextToken();
 
-        //call expression again after relation
-        expression();
+            //call expression again after relation
+            expression();
+        }
+
+        else if(strcmp(cur_token, "neqsym") == 0)
+        {
+             getNextToken();
+
+             expression();
+        }
+
+        else if(strcmp(cur_token, "lessym") == 0)
+        {
+            getNextToken();
+
+            expression();
+        }
+
+        else if(strcmp(cur_token, "leqsym") == 0)
+        {
+            getNextToken();
+
+            expression();
+        }
+
+        else if(strcmp(cur_token, "gtrsym") == 0)
+        {
+            getNextToken();
+
+            expression();
+        }
+
+        else if(strcmp(cur_token, "geqsym") == 0)
+        {
+            getNextToken();
+
+            expression();
+        }
+
+        else
+        {
+            printf("Error 16: Relation Is Missing In Condition.\n");
+
+            exit(16);
+        }
     }
 }
 
 void statement()
 {
-    printf("Yas.... %s\n", token);
     //check to see if the current token is the identifier symbol
-    if(strcmp(token, "identsym") == 0)
+    if(strcmp(cur_token, "identsym") == 0)
     {
-        getNextToken();
+        //check to make sure that the token we get next is in the symbol table
+        int answer = lookUp(temp_Val.ident);
 
-        printf("Current Symbol(3): %s\n", token);
-
-        int answer = lookUp(2, temp_Val.ident, 0, 0, 0);
-
+        //if it is not then the variable is not declared
+        //error this out
         if(answer < 0)
         {
-            printf("Error 17: %s is not declared.\n", token);
-            exit(17);
+            printf("Error 21: %s is not declared.\n", temp_Val.ident);
+            exit(21);
         }
 
-        printf("Current Symbol(4): %s\n", token);
+        getNextToken();
+
         //next symbol the must be the becomes, otherwise error
-        if(strcmp(token, "becomessym") != 0)
+        if(strcmp(cur_token, "becomessym") != 0)
         {
             printf("Error 11: Becomes Symbol Is Missing.\n");
             exit(11);
         }
 
-        char saved_ident[11];
-
-        strcpy(saved_ident, temp_Val.ident);
-
+        //get next token
         getNextToken();
 
-
+        //call expression
         expression();
-
 
     }
 
     //check current token to see if it is call symbol
-    else if(strcmp(token, "callsym") == 0)
+    else if(strcmp(cur_token, "callsym") == 0)
     {
         getNextToken();
 
         //next symbol must be the identifier symbol
-        if(strcmp(token, "identsym") != 0)
+        if(strcmp(cur_token, "identsym") != 0)
         {
             printf("Error 12: Identifier Missing After Call.\n");
             exit(12);
@@ -545,7 +1046,7 @@ void statement()
     }
 
     //check current token for the begins symbol
-    else if(strcmp(token, "beginsym") == 0)
+    else if(strcmp(cur_token, "beginsym") == 0)
     {
         getNextToken();
 
@@ -553,16 +1054,15 @@ void statement()
         statement();
 
         //continue to run statements until we hit something but a semicolon
-        while(strcmp(token, "semicolonsym") == 0)
+        while(strcmp(cur_token, "semicolonsym") == 0)
         {
             getNextToken();
 
             statement();
         }
 
-        printf("Current Symbol(2): %s\n", token);
         //ending symbol for after a begin must be end, else error
-        if(strcmp(token, "endsym") != 0)
+        if(strcmp(cur_token, "endsym") != 0)
         {
             printf("Error 13: End Symbol Missing From Statement.\n");
             exit(13);
@@ -572,7 +1072,7 @@ void statement()
     }
 
     //current token is if symbol
-    else if(strcmp(token, "ifsym") == 0)
+    else if(strcmp(cur_token, "ifsym") == 0)
     {
         getNextToken();
 
@@ -580,9 +1080,9 @@ void statement()
         condition();
 
         //next symbol following the if is then, otherwise error
-        if(strcmp(token, "thensym") != 0)
+        if(strcmp(cur_token, "thensym") != 0)
         {
-            printf("Error 14: Missing Preceding then After If.\n");
+            printf("Error 14: Missing Preceding Then After If.\n");
             exit(14);
         }
 
@@ -590,10 +1090,19 @@ void statement()
 
         //call statement for the if statement
         statement();
+
+        //optional else statement
+        //if(strcmp(token, "elsesym") == 0)
+        //{
+            //getNextToken();
+
+            //statement();
+        //}
+
     }
 
     //current token is the while symbol
-    else if(strcmp(token, "whilesym") == 0)
+    else if(strcmp(cur_token, "whilesym") == 0)
     {
         getNextToken();
 
@@ -601,9 +1110,9 @@ void statement()
         condition();
 
         //must be followed by do symbol, else error
-        if(strcmp(token, "dosym") != 0)
+        if(strcmp(cur_token, "dosym") != 0)
         {
-            printf("Error 15: Missing do After while.\n");
+            printf("Error 15: Missing do before while.\n");
             exit(15);
         }
 
@@ -612,30 +1121,29 @@ void statement()
         statement();
     }
 
+    else if(strcmp(cur_token, "writesym") == 0 || strcmp(cur_token, "readsym") == 0)
+    {
+        getNextToken();
 
-}
+        if(strcmp(cur_token, "identsym") != 0)
+        {
+            printf("Error 24: Identifier Missing For Read In.\n");
+            exit(24);
+        }
 
-void convertToAssembly(int OP, int reg, int L, int M)
-{
-    if(instruction > 499)
-        error(21);
-    
-    instructions[instructionCount].OP = OP;
-    instructions[instructionCount].reg = reg;
-    instructions[instructionCount].L = L;
-    instructions[instructionCount].M = M;
-    
-    instructionCount++;
-}
+        //check to make sure that the token we get next is in the symbol table
+        int answer = lookUp(temp_Val.ident);
 
-void printAssembly(char *argv[])
-{
-    File *file = fopen(argv[2], "w");
-    
-    for(int i = 0; i < instructionCount; i++)
-        printf("%d %d %d %d\n", instructions[instructionCount].OP, instructions[instructionCount].reg, instructions[instructionCount].L, instructions[instructionCount].M);
-    
-    fclose(file);
+        //if it is not then the variable is not declared
+        //error this out
+        if(answer < 0)
+        {
+            printf("Error 21: %s is not declared.\n", temp_Val.ident);
+            exit(21);
+        }
+
+        getNextToken();
+    }
 }
 
 //if correct, inserts the declaration into the symbol table
@@ -648,9 +1156,8 @@ void constant_Declaration()
     while(condition)
     {
         getNextToken();
-
         //check to make sure next token is the identifer
-        if(strcmp(token, "identsym") != 0)
+        if(strcmp(cur_token, "identsym") != 0)
         {
             printf("Error 3: Identifier Missing.\n");
             exit(3);
@@ -660,40 +1167,35 @@ void constant_Declaration()
         getNextToken();
 
         //check token for equal sign
-        if(strcmp(token, "eqsym") != 0)
+        if(strcmp(cur_token, "eqsym") != 0)
         {
             printf("Error 4: Equal Sign Missing\n");
             exit(4);
         }
 
-        printf("tempVAL(1) = %s\n", temp_Val.ident);
-
         getNextToken();
 
         //we know the next token needs to be a number
-        if(strcmp(token, "numbersym") != 0)
+        if(strcmp(cur_token, "numbersym") != 0)
         {
             printf("Error 5: Number Missing For Constant Declaration.\n");
             exit(5);
         }
 
-        printf("tempVAL(2) = %s\n", temp_Val.ident);
-
         //insert into hash table
         insertHash(1, temp_Val.ident, temp_Val.val, 0, 0);
-
 
         getNextToken();
 
         //check for comma
-        if(strcmp(token, "commasym") == 0)
+        if(strcmp(cur_token, "commasym") == 0)
             condition = 1;
         else
             condition = 0;
     }
 
     //finally check for the semicolon and error otherwise
-    if(strcmp(token, "semicolonsym") != 0)
+    if(strcmp(cur_token, "semicolonsym") != 0)
     {
         printf("Error 6: Semicolon Missing For Constant Declaration.\n");
         exit(6);
@@ -712,11 +1214,9 @@ void var_Declaration()
     while(condition)
     {
         getNextToken();
-        printf("Current Token(1): %s\n", token);
-
 
         //check for identifier symbol
-        if(strcmp(token, "identsym") != 0)
+        if(strcmp(cur_token, "identsym") != 0)
         {
             printf("Error 16: Identifier Missing for Integer Declaration.\n");
             exit(16);
@@ -728,13 +1228,13 @@ void var_Declaration()
         getNextToken();
 
         //if we have comma continue the loop
-        if(strcmp(token, "commasym") != 0)
+        if(strcmp(cur_token, "commasym") != 0)
             condition = 0;
 
     }
 
     //check for semicolon
-    if(strcmp(token, "semicolonsym") != 0)
+    if(strcmp(cur_token, "semicolonsym") != 0)
     {
         printf("Error 7: Semicolon Missing For Integer Declaration.\n");
         exit(7);
@@ -749,7 +1249,7 @@ void proc_Declaration()
     getNextToken();
 
     //check for the identifier symbol, else error
-    if(strcmp(token, "identsym") != 0)
+    if(strcmp(cur_token, "identsym") != 0)
     {
         printf("Error 8: Identifier Missing For Procedure Declaration.\n");
         exit(8);
@@ -761,7 +1261,7 @@ void proc_Declaration()
     getNextToken();
 
     //check for the semicolon after declaration, else error
-    if(strcmp(token, "semicolonsym") != 0)
+    if(strcmp(cur_token, "semicolonsym") != 0)
     {
         printf("Error 9: Semicolon Missing For Procedure Declaration.\n");
         exit(9);
@@ -773,7 +1273,7 @@ void proc_Declaration()
     block();
 
     //check last token to be semicolon
-    if(strcmp(token, "semicolonsym") != 0)
+    if(strcmp(cur_token, "semicolonsym") != 0)
     {
         printf("Error 10: Semicolon Missing For Procedure Declaration.\n");
         exit(10);
@@ -784,18 +1284,16 @@ void proc_Declaration()
 
 void block()
 {
-
-
     //token is is constant
-    if(strcmp(token, "constsym") == 0)
+    if(strcmp(cur_token, "constsym") == 0)
        constant_Declaration();
 
     //integer declaration portion
-    if(strcmp(token, "varsym") == 0)
+    if(strcmp(cur_token, "varsym") == 0)
         var_Declaration();
 
     //procedure declaration
-    while(strcmp(token, "procsym") == 0)
+    while(strcmp(cur_token, "procsym") == 0)
         proc_Declaration();
 
     statement();
@@ -808,49 +1306,110 @@ void program()
     //call block
     block();
 
-    printf("OKAY: %s\n", token);
     //make sure program ends with period
-    if(strcmp(token, "periodsym") != 0)
+    if(strcmp(cur_token, "periodsym") != 0)
     {
         printf("Error 2: Period Missing.\n");
         exit(2);
     }
 }
 //this read the file, general
-void readFile()
+void readFiles(int argc, char **argv)
 {
+
+    //used for scanner program
+    char specialChar[13] = {'+','-','*','/','(',')','=',',','.','<','>',';',':'};
+    char digits[10] = {'0','1','2', '3', '4', '5', '6', '7', '8', '9'};
+    char letters[52] = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k',
+    'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w' , 'x', 'y', 'z',
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O',
+    'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'};
+    int token_len;
+    int do_token_print = 0, do_assembly_print = 0, do_virtual_trace = 0;
+
+    //now loop through arguments and set the booleans
+    for(int i = 0; i < argc; i++)
+    {
+        //we want to print the tokens
+        if(strcmp(argv[i], "-l") == 0)
+            do_token_print = 1;
+
+        //we want to print the assembly code
+        else if(strcmp(argv[i], "-a") == 0)
+            do_assembly_print = 1;
+
+        //we want to print the stack trace
+        else if(strcmp(argv[i], "-v") == 0)
+            do_virtual_trace = 1;
+    }
+
+    scanner_input = fopen("input1.txt", "r");
+
+    if(scanner_input)
+    {
+        token_len = process(specialChar, scanner_input, digits, letters);
+        tokenCheck(token_len, digits, letters);
+    }
+
+    else
+        error(1);
+
+    //decision to print the tokens
+    if(do_token_print)
+        print_list(token_len);
+
+    //need to output the file
+    parser_input = fopen("input2.txt", "w");
+
+    //write the tokens to that file
+    for(int i = 0; i < token_len; i++)
+    {
+        fprintf(parser_input, "%s", tokens[i].sym_name);
+
+        //output the variable or numbers
+        if(strcmp(tokens[i].sym_name, "identsym ") == 0 || strcmp(tokens[i].sym_name, "numbersym ") == 0)
+            fprintf(parser_input, "%s ", tokens[i].name);
+
+    }
+
+
+    fclose(parser_input);
+
     //open file to read
-    file = fopen("test.txt", "r");
+    parser_input = fopen("input2.txt", "r");
 
     //we found the file
-    if(file)
+    if(parser_input)
     {
         //this will start the analysis
         program();
-
     }
 
     //we have not found the file, throw the first error
     else
+        error(1);
+
+    if(do_assembly_print)
+        printAssembly();
+
+    virtual_input = fopen("input3.txt", "w");
+
+    if(virtual_input)
     {
-        printf("Error 1: File Not Found.\n");
-        exit(1);
+
     }
 
-
-
+    else
+        error(1);
 }
 
-int main()
+
+int main(int argc, char **argv)
 {
     addr = 0;
+
     //start reading the tokens file
-    readFile();
+    readFiles(argc, argv);
 
-    if(lookUp(1, "x", 10, 0, 0) < 0)
-        printf("FAILED.\n");
-    else
-        printf("SUCCESSFUL.\n");
-
-    printf("DONE: %d\n", temp_Val.val);
+    printf("SUCCESSFUL!");
 }
