@@ -1,3 +1,12 @@
+// Authors:
+//      Aaron Hebson
+//      Lilly Jackson
+//      Zach Muller
+//
+// COP 3402 - Spring 2017
+//
+// Parser
+
 #include <parser.h>
 
 // A neat function for error printing
