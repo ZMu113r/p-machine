@@ -43,6 +43,8 @@ typedef struct instruction
 //gonna define all procedures here to allow the reader to wrap their mind around what I'm doing
 //also avoid implicit declaration:)
 void error(int errNum);
+void convertToAssembly(int OP, int reg, int L, int M);
+void constant_Declaration();
 struct Node* createNode(Symbol s);
 Symbol *createSymbol(int kind, char *name, int val, int level, int addr);
 struct Node *insertNode(Symbol sym, struct Node *head);
@@ -57,8 +59,6 @@ int term();
 void expression();
 void condition();
 void statement();
-void convertToAssembly(int OP, int reg, int L, int M);
-void constant_Declaration();
 void var_Declaration();
 void proc_Declaration();
 void block();
