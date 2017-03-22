@@ -1,84 +1,5 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-//this will be used to store tokens that meet grammar requirements
-typedef struct
-{
-    int kind;             //const = 1, var = 2, proc = 3
-    char name[10];        //name up to 11 characters
-    int val;              //number in ASCII
-    int level;            //L level
-    int addr;             //M address
-} Symbol;
-
-//this will be used to maintain the symbol table
-//symbol table is a hash table of nodes
-struct Node
-{
-    Symbol sym;
-    struct Node *next;
-};
-
-typedef struct hash
-{
-    struct Node *head;
-    int count;
-} hash;
-
-typedef struct temporary
-{
-    int val;
-    char ident[11];
-} temp;
-
-typedef struct token
-{
-    char name[11];
-    int id;
-    char sym_name[20];
-    int val;
-    char *var_name[11];
-} token;
-
-
-//gonna define all procedures here to allow the reader to wrap their mind around what I'm doing
-//also avoid implicit declaration:)
-void error(int errNum);
-struct Node* createNode(Symbol s);
-Symbol *createSymbol(int kind, char *name, int val, int level, int addr);
-struct Node *insertNode(Symbol sym, struct Node *head);
-int compareSymbols(Symbol s1, Symbol s2);
-int destroyNode(Symbol s, struct Node *head);
-void getNextToken();
-unsigned int hashValue(char *str, unsigned int len);
-int lookUp(char *name);
-void insertHash(int kind, char *name, int value, int level, int addr);
-void factor();
-void term();
-void expression();
-void condition();
-void statement();
-void constant_Declaration();
-void var_Declaration();
-void proc_Declaration();
-void block();
-void program();
-void readFile();
-
-//needed global variables for all functions
-char cur_token [11];
-const unsigned int MAX_SYMBOLS = 10000;
-struct hash symbol_table[10000];
-struct Node insertingNode;
-int addr;
-int test;
-temp temp_Val;
-FILE *scanner_input, *parser_input, *virtual_input, *output;
-token tokens[9999];
-
 // A neat function for error printing
-void error(int errNum)
+void error(int errNum, char *name)
 {
     switch(errNum)
     {
@@ -168,11 +89,12 @@ void error(int errNum)
             break;
 
         case 18:
+            printf("Error 18: Declaration Missing For %s\n", name);
             exit(18);
             break;
 
         case 19:
-            printf("Error 19: The variable has already been declared.\n");
+            printf("Error 19: %s has already been declared.\n", name);
             exit(19);
             break;
     }
@@ -181,7 +103,7 @@ void error(int errNum)
 void convertToAssembly(int OP, int reg, int L, int M)
 {
     if(instruction > 499)
-        error(21);
+        error(19);
 
     instructions[instructionCount].OP = OP;
     instructions[instructionCount].reg = reg;
@@ -825,10 +747,7 @@ struct Node *lookUpSym(char *name)
 
     //error if we don't find the it all
     if(lookUp(name) < 0)
-    {
-        printf("Error 18: Declaration Missing For %s\n", name);
-        exit(18);
-    }
+        error(18, name);
 
     //hash the name
     int hash = hashValue(name, strlen(name));
@@ -855,11 +774,7 @@ void insertHash(int kind, char *name, int value, int level, int addr)
 
     //check to see if that ident has been inserted already
     if(lookUp(name) == 0)
-    {
-        printf("Error 19: %s has already been declared.\n", name);
-        exit(19);
-    }
-
+        error(19, name);
 
     //insert into list
     symbol_table[hash].head = insertNode(sym, symbol_table[hash].head);
@@ -887,10 +802,7 @@ void factor()
 
         //next token has to be the closing parenthesis
         if(strcmp(cur_token, "rparentsym") != 0)
-        {
-            printf("Error 17: Missing Closing Parenthesis.\n");
-            exit(17);
-        }
+            error(17, NULL);
 
         getNextToken();
     }
@@ -989,11 +901,7 @@ void condition()
         }
 
         else
-        {
-            printf("Error 16: Relation Is Missing In Condition.\n");
-
-            exit(16);
-        }
+            error(16, NULL);
     }
 }
 
@@ -1017,10 +925,7 @@ void statement()
 
         //next symbol the must be the becomes, otherwise error
         if(strcmp(cur_token, "becomessym") != 0)
-        {
-            printf("Error 11: Becomes Symbol Is Missing.\n");
-            exit(11);
-        }
+            error(11, NULL);
 
         //get next token
         getNextToken();
@@ -1037,10 +942,7 @@ void statement()
 
         //next symbol must be the identifier symbol
         if(strcmp(cur_token, "identsym") != 0)
-        {
-            printf("Error 12: Identifier Missing After Call.\n");
-            exit(12);
-        }
+            error(12, NULL);
 
         getNextToken();
     }
@@ -1063,10 +965,7 @@ void statement()
 
         //ending symbol for after a begin must be end, else error
         if(strcmp(cur_token, "endsym") != 0)
-        {
-            printf("Error 13: End Symbol Missing From Statement.\n");
-            exit(13);
-        }
+            error(13, NULL);
 
         getNextToken();
     }
@@ -1081,10 +980,7 @@ void statement()
 
         //next symbol following the if is then, otherwise error
         if(strcmp(cur_token, "thensym") != 0)
-        {
-            printf("Error 14: Missing Preceding Then After If.\n");
-            exit(14);
-        }
+            error(14, NULL);
 
         getNextToken();
 
@@ -1111,10 +1007,7 @@ void statement()
 
         //must be followed by do symbol, else error
         if(strcmp(cur_token, "dosym") != 0)
-        {
-            printf("Error 15: Missing do before while.\n");
-            exit(15);
-        }
+            error(15, NULL);
 
         getNextToken();
 
@@ -1158,29 +1051,20 @@ void constant_Declaration()
         getNextToken();
         //check to make sure next token is the identifer
         if(strcmp(cur_token, "identsym") != 0)
-        {
-            printf("Error 3: Identifier Missing.\n");
-            exit(3);
-        }
+            error(3, NULL);
 
         //identifier name
         getNextToken();
 
         //check token for equal sign
         if(strcmp(cur_token, "eqsym") != 0)
-        {
-            printf("Error 4: Equal Sign Missing\n");
-            exit(4);
-        }
+            error(4, NULL);
 
         getNextToken();
 
         //we know the next token needs to be a number
         if(strcmp(cur_token, "numbersym") != 0)
-        {
-            printf("Error 5: Number Missing For Constant Declaration.\n");
-            exit(5);
-        }
+            error(5, NULL);
 
         //insert into hash table
         insertHash(1, temp_Val.ident, temp_Val.val, 0, 0);
@@ -1196,10 +1080,7 @@ void constant_Declaration()
 
     //finally check for the semicolon and error otherwise
     if(strcmp(cur_token, "semicolonsym") != 0)
-    {
-        printf("Error 6: Semicolon Missing For Constant Declaration.\n");
-        exit(6);
-    }
+        error(6, NULL);
 
     getNextToken();
 }
@@ -1235,10 +1116,7 @@ void var_Declaration()
 
     //check for semicolon
     if(strcmp(cur_token, "semicolonsym") != 0)
-    {
-        printf("Error 7: Semicolon Missing For Integer Declaration.\n");
-        exit(7);
-    }
+        error(7, NULL);
 
     getNextToken();
 }
@@ -1250,10 +1128,7 @@ void proc_Declaration()
 
     //check for the identifier symbol, else error
     if(strcmp(cur_token, "identsym") != 0)
-    {
-        printf("Error 8: Identifier Missing For Procedure Declaration.\n");
-        exit(8);
-    }
+        error(8, NULL);
 
     //inserts into the hashtable
     insertHash(3, temp_Val.ident, 0, 0, addr++);
@@ -1262,10 +1137,7 @@ void proc_Declaration()
 
     //check for the semicolon after declaration, else error
     if(strcmp(cur_token, "semicolonsym") != 0)
-    {
-        printf("Error 9: Semicolon Missing For Procedure Declaration.\n");
-        exit(9);
-    }
+        error(9, NULL);
 
     getNextToken();
 
@@ -1274,10 +1146,7 @@ void proc_Declaration()
 
     //check last token to be semicolon
     if(strcmp(cur_token, "semicolonsym") != 0)
-    {
-        printf("Error 10: Semicolon Missing For Procedure Declaration.\n");
-        exit(10);
-    }
+        error(10, NULL);
 
     getNextToken();
 }
@@ -1308,10 +1177,7 @@ void program()
 
     //make sure program ends with period
     if(strcmp(cur_token, "periodsym") != 0)
-    {
-        printf("Error 2: Period Missing.\n");
-        exit(2);
-    }
+        error(2, NULL);
 }
 //this read the file, general
 void readFiles(int argc, char **argv)
@@ -1352,7 +1218,7 @@ void readFiles(int argc, char **argv)
     }
 
     else
-        error(1);
+        error(1, NULL);
 
     //decision to print the tokens
     if(do_token_print)
@@ -1387,7 +1253,7 @@ void readFiles(int argc, char **argv)
 
     //we have not found the file, throw the first error
     else
-        error(1);
+        error(1, NULL);
 
     if(do_assembly_print)
         printAssembly();
@@ -1400,7 +1266,7 @@ void readFiles(int argc, char **argv)
     }
 
     else
-        error(1);
+        error(1, NULL);
 }
 
 
