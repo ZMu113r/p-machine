@@ -1,3 +1,5 @@
+#include <parser.h>
+
 // A neat function for error printing
 void error(int errNum, char *name)
 {
