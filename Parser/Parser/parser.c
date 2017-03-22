@@ -93,6 +93,12 @@ token tokens[9999];
 int registers[16] = {0};
 int stack[MAX_STACK_HEIGHT] = {0};
 FILE *scanner_input, *parser_input, *virtual_input, *output;
+int var_total = 0;
+
+//all used for converting to assembly code
+int toggle = -1;
+int have_condition = 0;
+int saved_index;
 
 //find base
 int findBase(int L, int base, int stack[]){
@@ -162,7 +168,7 @@ char * getInstructName(int opcode){
     return "";
 }
 
-void virtualMachine()
+void virtualMachine(int print)
 {
     int PC = 0; // program counter
     int SP = 0; // stack pointer
@@ -173,19 +179,20 @@ void virtualMachine()
     int AR_Marker[MAX_STACK_HEIGHT] = {-1};
     int lastARIndex = 0;
 
-    // input the program's code
-    FILE * fp;
-    fp = fopen("inputfile.txt", "r");
-
     int count = 0;
-    while(!feof(fp)){
-        fscanf(fp, "%d %d %d %d", &code[count].OP, &code[count].R, &code[count].L, &code[count].M);
+
+    /*
+    while(!feof(virtual_input)){
+        fscanf(virtual_input, "%d %d %d %d", &code[count].OP, &code[count].R, &code[count].L, &code[count].M);
         count++;
     }
 
-    fclose(fp);
+    fclose(virtual_input);
+
+    */
 
 
+    /*
     // Output the program in assembly language with line numbers
     printf("Line\tOP\tR\tL\tM\n");
     int i;
@@ -194,8 +201,10 @@ void virtualMachine()
     }
     printf("\n");
 
+    */
+
     // Output headers for the stack printout
-    printf("Initial Values\t\t\t\tpc\tbp\tsp\n");
+    //printf("Initial Values\t\t\t\tpc\tbp\tsp\n");
 
     int opcode, line;
     while(halt == 0){
@@ -256,7 +265,8 @@ void virtualMachine()
                 break;
 
             case 9: // SIO 1
-                printf("%d\n", registers[IR.R]);
+                if(print)
+                    printf("%d\n", registers[IR.R]);
                 break;
 
             case 10: // SIO 2
@@ -319,17 +329,20 @@ void virtualMachine()
                 break;
         } // end switch
 
+        if(print)
+        {
+            printf("%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t", line, getInstructName(IR.OP), IR.R, IR.L, IR.M, PC, BP, SP);
 
-        printf("%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t", line, getInstructName(IR.OP), IR.R, IR.L, IR.M, PC, BP, SP);
-
-        // loop to print out the stack
-        for(i=1; i<=SP; i++){
-            if(AR_Marker[i-1] == 1){
-                printf("|\t");
+            // loop to print out the stack
+            for(int i=1; i<=SP; i++){
+                if(AR_Marker[i-1] == 1){
+                    printf("|\t");
+                }
+                printf("%d\t", stack[i]);
             }
-            printf("%d\t", stack[i]);
+            printf("\n");
+
         }
-        printf("\n");
 
     } // end while
 }
@@ -441,6 +454,7 @@ void convertToAssembly(int OP, int reg, int L, int M)
     if(instructionCount > 499)
         error(19, "");
 
+    //puts the instruction
     code[instructionCount].OP = OP;
     code[instructionCount].R = reg;
     code[instructionCount].L = L;
@@ -452,7 +466,7 @@ void convertToAssembly(int OP, int reg, int L, int M)
 void printAssembly()
 {
     for(int i = 0; i < instructionCount; i++)
-        printf("%d %d %d %d\n", code[instructionCount].OP, code[instructionCount].R, code[instructionCount].L, code[instructionCount].M);
+        printf("%d %d %d %d\n", code[i].OP, code[i].R, code[i].L, code[i].M);
 
 }
 
@@ -594,7 +608,6 @@ void printTokens(int len)
 
 void tokenCheck(int length, char digits[], char letters[])
 {
-
     int var_flag = 0, dig_flag = 0;
 
     for(int i = 0; i < length; i++)
@@ -918,6 +931,7 @@ Symbol *createSymbol(int kind, char *name, int val, int level, int addr)
         //set variables
         temp->level = level;
         temp->addr = addr;
+        temp->val = 0;
     }
 
     return temp;
@@ -976,6 +990,8 @@ int compareSymbols(Symbol s1, Symbol s2)
 //returns 0 if found, 1 otherwise
 int destroyNode(Symbol s, struct Node *head)
 {
+    var_total--;
+
     //use temp node
     struct Node *temp = head;
 
@@ -1014,6 +1030,7 @@ void getNextToken()
 {
     fscanf(parser_input, "%s", &cur_token);
 
+    printf("TOKEN = %s\n", cur_token);
     //scans next token as the identifier name
     if(strcmp(cur_token, "identsym") == 0)
         fscanf(parser_input, "%s", &temp_Val.ident);
@@ -1101,6 +1118,8 @@ struct Node *lookUpSym(char *name)
 //this inserts a symbol into the symbol table (which is really a hash table)
 void insertHash(int kind, char *name, int value, int level, int addr)
 {
+    var_total++;
+
     //create the symbol
     Symbol sym = *createSymbol(kind, name, value, level, addr);
 
@@ -1121,11 +1140,61 @@ void factor()
 {
     //check for identifier
     if(strcmp(cur_token, "identsym") == 0)
+    {
+        if(lookUpSym(temp_Val.ident)->sym.kind == 1)
+        {
+            if(toggle != 0)
+            {
+                convertToAssembly(3, 0, 0, lookUpSym(temp_Val.ident)->sym.val);
+                toggle = 0;
+            }
+
+            else
+            {
+                convertToAssembly(3, 1, 0, lookUpSym(temp_Val.ident)->sym.val);
+                toggle = 1;
+            }
+
+        }
+
+        else if(lookUpSym(temp_Val.ident)->sym.kind == 2)
+        {
+
+            if(toggle != 0)
+            {
+                convertToAssembly(3, 0, 0, lookUpSym(temp_Val.ident)->sym.addr);
+                toggle = 0;
+            }
+
+            else
+            {
+                convertToAssembly(3, 1, 0, lookUpSym(temp_Val.ident)->sym.addr);
+                toggle = 1;
+            }
+
+        }
         getNextToken();
+    }
+
 
     //check for number
     else if(strcmp(cur_token, "numbersym") == 0)
+    {
+        if(toggle != 0)
+        {
+            convertToAssembly(1, 0, 0, temp_Val.val);
+            toggle = 0;
+        }
+
+        else
+        {
+            toggle = 1;
+            convertToAssembly(1, 1, 0, temp_Val.val);
+        }
+
         getNextToken();
+    }
+
 
     //check for '('
     else if(strcmp(cur_token, "lparentsym") == 0)
@@ -1174,9 +1243,10 @@ void expression()
 
 }
 
-//condition returns 0 if false and 1 if true
 void condition()
 {
+
+    have_condition = 1;
     //current token is the odd symbol
     if(strcmp(cur_token, "oddsym") == 0)
     {
@@ -1184,6 +1254,8 @@ void condition()
 
         //call the expression for the odd symb
         expression();
+
+        convertToAssembly(17, 0, 0, 1);
     }
 
     else
@@ -1198,6 +1270,8 @@ void condition()
 
             //call expression again after relation
             expression();
+
+            convertToAssembly(19, 0, 0, 1);
         }
 
         else if(strcmp(cur_token, "neqsym") == 0)
@@ -1205,6 +1279,8 @@ void condition()
              getNextToken();
 
              expression();
+
+             convertToAssembly(20, 0, 0, 1);
         }
 
         else if(strcmp(cur_token, "lessym") == 0)
@@ -1212,6 +1288,8 @@ void condition()
             getNextToken();
 
             expression();
+
+            convertToAssembly(21, 0, 0, 1);
         }
 
         else if(strcmp(cur_token, "leqsym") == 0)
@@ -1219,6 +1297,8 @@ void condition()
             getNextToken();
 
             expression();
+
+            convertToAssembly(22, 0, 0, 1);
         }
 
         else if(strcmp(cur_token, "gtrsym") == 0)
@@ -1226,6 +1306,8 @@ void condition()
             getNextToken();
 
             expression();
+
+            convertToAssembly(23, 0, 0, 1);
         }
 
         else if(strcmp(cur_token, "geqsym") == 0)
@@ -1233,6 +1315,8 @@ void condition()
             getNextToken();
 
             expression();
+
+            convertToAssembly(24, 0, 0, 1);
         }
 
         else
@@ -1245,6 +1329,11 @@ void statement()
     //check to see if the current token is the identifier symbol
     if(strcmp(cur_token, "identsym") == 0)
     {
+
+        char saved_ident[11];
+
+        strcpy(saved_ident, temp_Val.ident);
+
         //check to make sure that the token we get next is in the symbol table
         int answer = lookUp(temp_Val.ident);
 
@@ -1255,6 +1344,7 @@ void statement()
             printf("Error 21: %s is not declared.\n", temp_Val.ident);
             exit(21);
         }
+
 
         getNextToken();
 
@@ -1268,6 +1358,17 @@ void statement()
         //call expression
         expression();
 
+        if(toggle == 0)
+        {
+            convertToAssembly(4, 0, 0, lookUpSym(saved_ident)->sym.addr);
+            toggle = 1;
+        }
+
+        else if (toggle == 1)
+        {
+            convertToAssembly(4, 1, 0, lookUpSym(saved_ident)->sym.addr);
+            toggle = 0;
+        }
     }
 
     //check current token to see if it is call symbol
@@ -1302,6 +1403,16 @@ void statement()
         if(strcmp(cur_token, "endsym") != 0)
             error(13, NULL);
 
+        if(have_condition)
+        {
+            int offset = instructionCount - saved_index;
+
+            printf("offset = %d\nCurrent = %d\n", offset, instructionCount);
+            code[instructionCount - offset].M = instructionCount;
+
+            have_condition = 0;
+        }
+
         getNextToken();
     }
 
@@ -1312,6 +1423,11 @@ void statement()
 
         //call the condition for the if statement
         condition();
+
+        convertToAssembly(8, toggle, 0, -1);
+
+        printf("Instruction = %d\n", instructionCount);
+        saved_index = instructionCount;
 
         //next symbol following the if is then, otherwise error
         if(strcmp(cur_token, "thensym") != 0)
@@ -1500,6 +1616,7 @@ void block()
     while(strcmp(cur_token, "procsym") == 0)
         proc_Declaration();
 
+    convertToAssembly(6, 0, 0, 4+var_total);
     statement();
 }
 
@@ -1513,6 +1630,8 @@ void program()
     //make sure program ends with period
     if(strcmp(cur_token, "periodsym") != 0)
         error(2, NULL);
+
+    convertToAssembly(11, 0, 0, 3);
 }
 //this read the file, general
 void readFiles(int argc, char **argv)
@@ -1578,7 +1697,7 @@ void readFiles(int argc, char **argv)
 
     //open file to read
     parser_input = fopen("input2.txt", "r");
-
+    virtual_input = fopen("input3.txt", "w");
     //we found the file
     if(parser_input)
     {
@@ -1593,11 +1712,14 @@ void readFiles(int argc, char **argv)
     if(do_assembly_print)
         printAssembly();
 
-    virtual_input = fopen("input3.txt", "w");
+    fclose(virtual_input);
+
+    virtual_input = fopen("input3.txt", "r");
 
     if(virtual_input)
     {
-
+        printAssembly();
+        //virtualMachine(do_virtual_trace);
     }
 
     else
@@ -1607,7 +1729,7 @@ void readFiles(int argc, char **argv)
 
 int main(int argc, char **argv)
 {
-    addr = 0;
+    addr = 4;
 
     //start reading the tokens file
     readFiles(argc, argv);
