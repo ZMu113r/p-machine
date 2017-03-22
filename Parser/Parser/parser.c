@@ -1,18 +1,14 @@
-// Authors:
-//      Aaron Hebson
-//      Lilly Jackson
-//      Zach Muller
-//
-// COP 3402 - Spring 2017
-//
-// Parser
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+
+#define MAX_STACK_HEIGHT 2000
+#define MAX_CODE_LENGTH 500
+#define MAX_LEXI_LEVELS 3
+
 //this will be used to store tokens that meet grammar requirements
-typedef struct
+typedef struct Symbol
 {
     int kind;             //const = 1, var = 2, proc = 3
     char name[10];        //name up to 11 characters
@@ -41,19 +37,24 @@ typedef struct temporary
     char ident[11];
 } temp;
 
+typedef struct instruction
+{
+    int OP;
+    int R;
+    int L;
+    int M;
+} instruction;
+
 typedef struct token
 {
     char name[11];
     int id;
     char sym_name[20];
-    int val;
-    char *var_name[11];
+
 } token;
-
-
 //gonna define all procedures here to allow the reader to wrap their mind around what I'm doing
 //also avoid implicit declaration:)
-void error(int errNum);
+void error(int errNum, char *name);
 struct Node* createNode(Symbol s);
 Symbol *createSymbol(int kind, char *name, int val, int level, int addr);
 struct Node *insertNode(Symbol sym, struct Node *head);
@@ -68,12 +69,15 @@ void term();
 void expression();
 void condition();
 void statement();
+void convertToAssembly(int OP, int reg, int L, int M);
 void constant_Declaration();
 void var_Declaration();
 void proc_Declaration();
 void block();
 void program();
 void readFile();
+int findBase(int, int, int[]);
+char * getInstructName(int);
 
 //needed global variables for all functions
 char cur_token [11];
@@ -83,8 +87,252 @@ struct Node insertingNode;
 int addr;
 int test;
 temp temp_Val;
-FILE *scanner_input, *parser_input, *virtual_input, *output;
+instruction code[500];
+int instructionCount = 0;
 token tokens[9999];
+int registers[16] = {0};
+int stack[MAX_STACK_HEIGHT] = {0};
+FILE *scanner_input, *parser_input, *virtual_input, *output;
+
+//find base
+int findBase(int L, int base, int stack[]){
+    int result; // find base L levels down
+    result = base;
+
+    while(L > 0){
+        result = stack[result + 1];
+        L--;
+    }
+
+    return result;
+}
+
+// function that retrieves the name of an instruction
+// to use when printing out that instruction
+char * getInstructName(int opcode){
+    switch(opcode) {
+        case 1:
+            return "lit";
+        case 2:
+            return "rtn";
+        case 3:
+            return "lod";
+        case 4:
+            return "sto";
+        case 5:
+            return "cal";
+        case 6:
+            return "inc";
+        case 7:
+            return "jmp";
+        case 8:
+            return "jpc";
+        case 9:
+        case 10:
+        case 11:
+            return "sio";
+        case 12:
+            return "neg";
+        case 13:
+            return "add";
+        case 14:
+            return "sub";
+        case 15:
+            return "mul";
+        case 16:
+            return "div";
+        case 17:
+            return "odd";
+        case 18:
+            return "mod";
+        case 19:
+            return "eql";
+        case 20:
+            return " neq";
+        case 21:
+            return "lss";
+        case 22:
+            return "leq";
+        case 23:
+            return "gtr";
+        case 24:
+            return "geq";
+    } // end switch
+
+    return "";
+}
+
+void virtualMachine()
+{
+    int PC = 0; // program counter
+    int SP = 0; // stack pointer
+    int BP = 1; // base pointer
+    instruction IR; // instruction register
+
+    int halt = 0;
+    int AR_Marker[MAX_STACK_HEIGHT] = {-1};
+    int lastARIndex = 0;
+
+    // input the program's code
+    FILE * fp;
+    fp = fopen("inputfile.txt", "r");
+
+    int count = 0;
+    while(!feof(fp)){
+        fscanf(fp, "%d %d %d %d", &code[count].OP, &code[count].R, &code[count].L, &code[count].M);
+        count++;
+    }
+
+    fclose(fp);
+
+
+    // Output the program in assembly language with line numbers
+    printf("Line\tOP\tR\tL\tM\n");
+    int i;
+    for(i=0; i<count; i++){
+        printf("%d\t%s\t%d\t%d\t%d\n", i, getInstructName(code[i].OP), code[i].R, code[i].L, code[i].M);
+    }
+    printf("\n");
+
+    // Output headers for the stack printout
+    printf("Initial Values\t\t\t\tpc\tbp\tsp\n");
+
+    int opcode, line;
+    while(halt == 0){
+        line = PC;
+
+        // fetch the instruction
+        IR = code[PC];
+        PC++;
+        opcode = IR.OP;
+
+        // execute the instruction
+        switch (opcode){
+            case 1: // LIT
+                registers[IR.R] = IR.M;
+                break;
+
+            case 2: // RTN
+                SP = BP - 1;
+                BP = stack[SP+3];
+                PC = stack[SP+4];
+
+                AR_Marker[lastARIndex] = -1;
+                break;
+
+            case 3: // LOD
+                registers[IR.R] = stack[findBase(IR.L, BP, stack) + IR.M];
+                break;
+
+            case 4: // STO
+                stack[findBase(IR.L, BP, stack) + IR.M] = registers[IR.R];
+                break;
+
+            case 5: // CAL
+                stack[SP + 1] = 0;
+                stack[SP + 2] = findBase(IR.L, BP, stack);
+                stack[SP + 3] = BP;
+                stack[SP + 4] = PC;
+                BP = SP + 1;
+                PC = IR.M;
+
+                // mark where to place bar in stack to separate activation records
+                AR_Marker[SP] = 1;
+                lastARIndex = SP;
+
+                break;
+
+            case 6: // INC
+                SP = SP + IR.M;
+                break;
+
+            case 7: // JMP
+                PC = IR.M;
+                break;
+
+            case 8: // JPC
+                if(registers[IR.R] == 0)
+                    PC = IR.M;
+                break;
+
+            case 9: // SIO 1
+                printf("%d\n", registers[IR.R]);
+                break;
+
+            case 10: // SIO 2
+                scanf("%d", &registers[IR.R]);
+                break;
+
+            case 11: // SIO 3
+                halt = 1;
+                break;
+
+            case 12: // NEG
+                registers[IR.R] = (-1) * registers[IR.L];
+                break;
+
+            case 13: // ADD
+                registers[IR.R] = registers[IR.L] + registers[IR.M];
+                break;
+
+            case 14: // SUB
+                registers[IR.R] = registers[IR.L] - registers[IR.M];
+                break;
+
+            case 15: // MUL
+                registers[IR.R] = registers[IR.L] * registers[IR.M];
+                break;
+
+            case 16: // DIV
+                registers[IR.R] = registers[IR.L] / registers[IR.M];
+                break;
+
+            case 17: // ODD
+                registers[IR.R] = registers[IR.R] % 2;
+                break;
+
+            case 18: // MOD
+                registers[IR.R] = registers[IR.L] % registers[IR.M];
+                break;
+
+            case 19: // EQL
+                registers[IR.R] = (registers[IR.L] == registers[IR.M]);
+                break;
+
+            case 20: // NEQ
+                registers[IR.R] = (registers[IR.L] != registers[IR.M]);
+                break;
+
+            case 21: // LSS
+                registers[IR.R] = (registers[IR.L] < registers[IR.M]);
+                break;
+
+            case 22: // LEQ
+                registers[IR.R] = (registers[IR.L] <= registers[IR.M]);
+                break;
+
+            case 23: // GTR
+                registers[IR.R] = (registers[IR.L] > registers[IR.M]);
+                break;
+            case 24: // GEQ
+                registers[IR.R] = (registers[IR.L] >= registers[IR.M]);
+                break;
+        } // end switch
+
+
+        printf("%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t", line, getInstructName(IR.OP), IR.R, IR.L, IR.M, PC, BP, SP);
+
+        // loop to print out the stack
+        for(i=1; i<=SP; i++){
+            if(AR_Marker[i-1] == 1){
+                printf("|\t");
+            }
+            printf("%d\t", stack[i]);
+        }
+        printf("\n");
+
+    } // end while
+}
 
 // A neat function for error printing
 void error(int errNum, char *name)
@@ -190,13 +438,13 @@ void error(int errNum, char *name)
 
 void convertToAssembly(int OP, int reg, int L, int M)
 {
-    if(instruction > 499)
-        error(19);
+    if(instructionCount > 499)
+        error(19, "");
 
-    instructions[instructionCount].OP = OP;
-    instructions[instructionCount].reg = reg;
-    instructions[instructionCount].L = L;
-    instructions[instructionCount].M = M;
+    code[instructionCount].OP = OP;
+    code[instructionCount].R = reg;
+    code[instructionCount].L = L;
+    code[instructionCount].M = M;
 
     instructionCount++;
 }
@@ -204,7 +452,7 @@ void convertToAssembly(int OP, int reg, int L, int M)
 void printAssembly()
 {
     for(int i = 0; i < instructionCount; i++)
-        printf("%d %d %d %d\n", instructions[instructionCount].OP, instructions[instructionCount].reg, instructions[instructionCount].L, instructions[instructionCount].M);
+        printf("%d %d %d %d\n", code[instructionCount].OP, code[instructionCount].R, code[instructionCount].L, code[instructionCount].M);
 
 }
 
@@ -444,6 +692,7 @@ void tokenCheck(int length, char digits[], char letters[])
         else if(strcmp(tokens[i].name, ";") == 0)
         {
             tokens[i].id = 18;
+
             strcpy(tokens[i].sym_name, "semicolonsym ");
         }
 
@@ -764,8 +1013,6 @@ int destroyNode(Symbol s, struct Node *head)
 void getNextToken()
 {
     fscanf(parser_input, "%s", &cur_token);
-
-    printf("Token = %s\n", cur_token);
 
     //scans next token as the identifier name
     if(strcmp(cur_token, "identsym") == 0)
