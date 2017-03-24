@@ -94,9 +94,9 @@ int registers[16] = {0};
 int stack[MAX_STACK_HEIGHT] = {0};
 FILE *scanner_input, *parser_input, *virtual_input, *output;
 int var_total = 0;
+int reg_count = 0;
 
 //all used for converting to assembly code
-int toggle = -1;
 int have_condition = 0;
 int saved_index;
 
@@ -202,9 +202,9 @@ void virtualMachine(int print)
     printf("\n");
 
     */
-
     // Output headers for the stack printout
-    //printf("Initial Values\t\t\t\tpc\tbp\tsp\n");
+    if(print)
+        printf("Initial Values\t\t\t\tpc\tbp\tsp\n");
 
     int opcode, line;
     while(halt == 0){
@@ -459,6 +459,9 @@ void convertToAssembly(int OP, int reg, int L, int M)
     code[instructionCount].R = reg;
     code[instructionCount].L = L;
     code[instructionCount].M = M;
+
+    if(OP == 8)
+        saved_index = instructionCount;
 
     instructionCount++;
 }
@@ -1030,7 +1033,6 @@ void getNextToken()
 {
     fscanf(parser_input, "%s", &cur_token);
 
-    printf("TOKEN = %s\n", cur_token);
     //scans next token as the identifier name
     if(strcmp(cur_token, "identsym") == 0)
         fscanf(parser_input, "%s", &temp_Val.ident);
@@ -1143,34 +1145,14 @@ void factor()
     {
         if(lookUpSym(temp_Val.ident)->sym.kind == 1)
         {
-            if(toggle != 0)
-            {
-                convertToAssembly(3, 0, 0, lookUpSym(temp_Val.ident)->sym.val);
-                toggle = 0;
-            }
-
-            else
-            {
-                convertToAssembly(3, 1, 0, lookUpSym(temp_Val.ident)->sym.val);
-                toggle = 1;
-            }
-
+            convertToAssembly(3, reg_count, 0, lookUpSym(temp_Val.ident)->sym.val);
+            reg_count++;
         }
 
         else if(lookUpSym(temp_Val.ident)->sym.kind == 2)
         {
-
-            if(toggle != 0)
-            {
-                convertToAssembly(3, 0, 0, lookUpSym(temp_Val.ident)->sym.addr);
-                toggle = 0;
-            }
-
-            else
-            {
-                convertToAssembly(3, 1, 0, lookUpSym(temp_Val.ident)->sym.addr);
-                toggle = 1;
-            }
+            convertToAssembly(3, reg_count, 0, lookUpSym(temp_Val.ident)->sym.addr);
+            reg_count++;
 
         }
         getNextToken();
@@ -1180,17 +1162,8 @@ void factor()
     //check for number
     else if(strcmp(cur_token, "numbersym") == 0)
     {
-        if(toggle != 0)
-        {
-            convertToAssembly(1, 0, 0, temp_Val.val);
-            toggle = 0;
-        }
-
-        else
-        {
-            toggle = 1;
-            convertToAssembly(1, 1, 0, temp_Val.val);
-        }
+        convertToAssembly(1, reg_count, 0, temp_Val.val);
+        reg_count++;
 
         getNextToken();
     }
@@ -1219,17 +1192,53 @@ void term()
     //keep looping when multiplying or dividing
     while(strcmp(cur_token, "multsym") == 0 || strcmp(cur_token, "slashsym") == 0)
     {
+        char temp[20];
+        int temp_reg = reg_count;
+
+        strcpy(temp, cur_token);
+
         getNextToken();
         factor();
-    }
 
+        if(strcmp(temp, "multsym") == 0)
+        {
+            convertToAssembly(15, temp_reg-1, temp_reg-1, temp_reg);
+            reg_count--;
+        }
+
+        else
+        {
+            convertToAssembly(16, temp_reg - 1, temp_reg-1, temp_reg);
+            reg_count--;
+        }
+
+    }
 }
 
 void expression()
 {
     //if we start with a plus or minus, then get the next token
     if(strcmp(cur_token, "plussym") == 0 || strcmp(cur_token, "minussym") == 0)
+    {
+        char temp[20];
+        int temp_reg = reg_count;
+
+        strcpy(temp, cur_token);
+
         getNextToken();
+
+        if(strcmp(temp, "plussym") == 0)
+        {
+            convertToAssembly(13, reg_count-1, reg_count-1, reg_count);
+            reg_count--;
+        }
+
+        else
+        {
+            convertToAssembly(14, reg_count - 1, reg_count-1, reg_count);
+            reg_count--;
+        }
+    }
 
     //call the term for the expression
     term();
@@ -1237,8 +1246,26 @@ void expression()
     //keep looping when adding or subtracting
     while(strcmp(cur_token, "plussym") == 0 || strcmp(cur_token, "minussym") == 0)
     {
+        char temp[20];
+        int temp_reg = reg_count;
+
+        strcpy(temp, cur_token);
+
         getNextToken();
         term();
+
+        if(strcmp(temp, "plussym") == 0)
+        {
+            convertToAssembly(13, temp_reg-1, temp_reg-1, temp_reg);
+            reg_count--;
+        }
+
+        else
+        {
+            convertToAssembly(14, temp_reg-1, temp_reg-1, temp_reg);
+            reg_count--;
+        }
+
     }
 
 }
@@ -1255,7 +1282,8 @@ void condition()
         //call the expression for the odd symb
         expression();
 
-        convertToAssembly(17, 0, 0, 1);
+        convertToAssembly(17, reg_count-1, 0, 0);
+        reg_count--;
     }
 
     else
@@ -1271,7 +1299,10 @@ void condition()
             //call expression again after relation
             expression();
 
-            convertToAssembly(19, 0, 0, 1);
+            reg_count--;
+            convertToAssembly(19, reg_count-1, reg_count-1, reg_count);
+            reg_count--;
+
         }
 
         else if(strcmp(cur_token, "neqsym") == 0)
@@ -1280,7 +1311,9 @@ void condition()
 
              expression();
 
-             convertToAssembly(20, 0, 0, 1);
+             reg_count--;
+             convertToAssembly(20, reg_count-1, reg_count-1, reg_count);
+             reg_count--;
         }
 
         else if(strcmp(cur_token, "lessym") == 0)
@@ -1289,7 +1322,9 @@ void condition()
 
             expression();
 
-            convertToAssembly(21, 0, 0, 1);
+            reg_count--;
+            convertToAssembly(21, reg_count-1, reg_count-1, reg_count);
+            reg_count--;
         }
 
         else if(strcmp(cur_token, "leqsym") == 0)
@@ -1298,7 +1333,9 @@ void condition()
 
             expression();
 
-            convertToAssembly(22, 0, 0, 1);
+            reg_count--;
+            convertToAssembly(22, reg_count-1, reg_count-1, reg_count);
+            reg_count--;
         }
 
         else if(strcmp(cur_token, "gtrsym") == 0)
@@ -1307,7 +1344,9 @@ void condition()
 
             expression();
 
-            convertToAssembly(23, 0, 0, 1);
+            reg_count--;
+            convertToAssembly(23, reg_count - 1, reg_count-1, reg_count);
+            reg_count--;
         }
 
         else if(strcmp(cur_token, "geqsym") == 0)
@@ -1316,7 +1355,9 @@ void condition()
 
             expression();
 
-            convertToAssembly(24, 0, 0, 1);
+            reg_count--;
+            convertToAssembly(24, reg_count-1, reg_count-1, reg_count);
+            reg_count--;
         }
 
         else
@@ -1358,17 +1399,9 @@ void statement()
         //call expression
         expression();
 
-        if(toggle == 0)
-        {
-            convertToAssembly(4, 0, 0, lookUpSym(saved_ident)->sym.addr);
-            toggle = 1;
-        }
+        reg_count--;
+        convertToAssembly(4, reg_count, 0, lookUpSym(saved_ident)->sym.addr);
 
-        else if (toggle == 1)
-        {
-            convertToAssembly(4, 1, 0, lookUpSym(saved_ident)->sym.addr);
-            toggle = 0;
-        }
     }
 
     //check current token to see if it is call symbol
@@ -1394,6 +1427,16 @@ void statement()
         //continue to run statements until we hit something but a semicolon
         while(strcmp(cur_token, "semicolonsym") == 0)
         {
+            if(have_condition)
+            {
+                int offset = instructionCount - saved_index;
+
+                printf("offset = %d\nCurrent = %d\n", offset, instructionCount);
+                code[instructionCount - offset].M = instructionCount;
+
+                have_condition = 0;
+            }
+
             getNextToken();
 
             statement();
@@ -1424,10 +1467,7 @@ void statement()
         //call the condition for the if statement
         condition();
 
-        convertToAssembly(8, toggle, 0, -1);
-
-        printf("Instruction = %d\n", instructionCount);
-        saved_index = instructionCount;
+        convertToAssembly(8, reg_count, 0, -1);
 
         //next symbol following the if is then, otherwise error
         if(strcmp(cur_token, "thensym") != 0)
@@ -1456,6 +1496,8 @@ void statement()
         //call condition for the while symbol
         condition();
 
+        convertToAssembly(8, reg_count, 0, -1);
+
         //must be followed by do symbol, else error
         if(strcmp(cur_token, "dosym") != 0)
             error(15, NULL);
@@ -1463,10 +1505,18 @@ void statement()
         getNextToken();
 
         statement();
+
+        //IMPORTANT DO NOT FORGET ABOUT THIS
+        convertToAssembly(7, 0, 0, saved_index-3);
     }
 
     else if(strcmp(cur_token, "writesym") == 0 || strcmp(cur_token, "readsym") == 0)
     {
+
+        char temp[20];
+
+        strcpy(temp, cur_token);
+
         getNextToken();
 
         if(strcmp(cur_token, "identsym") != 0)
@@ -1484,6 +1534,18 @@ void statement()
         {
             printf("Error 21: %s is not declared.\n", temp_Val.ident);
             exit(21);
+        }
+
+        if(strcmp(temp, "writesym") == 0)
+        {
+            convertToAssembly(3, reg_count, 0, lookUpSym(temp_Val.ident)->sym.addr);
+            convertToAssembly(9, reg_count, 0, 1);
+        }
+
+        else
+        {
+            convertToAssembly(10, reg_count, 0, 2);
+            reg_count++;
         }
 
         getNextToken();
@@ -1518,7 +1580,7 @@ void constant_Declaration()
             error(5, NULL);
 
         //insert into hash table
-        insertHash(1, temp_Val.ident, temp_Val.val, 0, 0);
+        insertHash(1, temp_Val.ident, temp_Val.val, 0, addr++);
 
         getNextToken();
 
@@ -1616,6 +1678,7 @@ void block()
     while(strcmp(cur_token, "procsym") == 0)
         proc_Declaration();
 
+    printf("var_total = %d\n", var_total);
     convertToAssembly(6, 0, 0, 4+var_total);
     statement();
 }
@@ -1719,6 +1782,7 @@ void readFiles(int argc, char **argv)
     if(virtual_input)
     {
         printAssembly();
+        //do_virtual_trace = 1;
         //virtualMachine(do_virtual_trace);
     }
 
