@@ -11,7 +11,7 @@
 typedef struct Symbol
 {
     int kind;             //const = 1, var = 2, proc = 3
-    char name[10];        //name up to 11 characters
+    char name[20];        //name up to 11 characters
     int val;              //number in ASCII
     int level;            //L level
     int addr;             //M address
@@ -465,6 +465,7 @@ void convertToAssembly(int OP, int reg, int L, int M)
 
 void printAssembly()
 {
+
     for(int i = 0; i < instructionCount; i++)
         printf("%d %d %d %d\n", code[i].OP, code[i].R, code[i].L, code[i].M);
 
@@ -511,7 +512,7 @@ int process(char specialChar[], FILE *file, char digits[], char letters[])
 {
     //declare things we will use in this function
     char c1, c2;
-    char str[12];
+    char str[20];
     int i, j;
     int in_comment = 0;
     //lets initialize this string
@@ -593,7 +594,6 @@ int process(char specialChar[], FILE *file, char digits[], char letters[])
         strcpy(str, "");
 
         //now read in the next character
-
     }
 
     return i;
@@ -855,11 +855,11 @@ void tokenCheck(int length, char digits[], char letters[])
                 exit(1);
             }
 
-            if(var_flag || dig_flag)
+            /*if(var_flag || dig_flag)
             {
                 printf("Token %s is not found.\n", tokens[i].name);
                 exit(1);
-            }
+            }*/
 
         }
 
@@ -1032,7 +1032,7 @@ struct Node *insertNode(Symbol sym, struct Node *head)
 void getNextToken()
 {
     fscanf(parser_input, "%s", cur_token);
-
+    printf("current token = %s\n", cur_token);
     //scans next token as the identifier name
     if(strcmp(cur_token, "identsym") == 0)
         fscanf(parser_input, "%s", temp_Val.ident);
@@ -1145,7 +1145,7 @@ void factor()
     {
         if(lookUpSym(temp_Val.ident)->sym.kind == 1)
         {
-            convertToAssembly(3, reg_count, 0, lookUpSym(temp_Val.ident)->sym.val);
+            convertToAssembly(1, reg_count, 0, lookUpSym(temp_Val.ident)->sym.val);
             reg_count++;
         }
 
@@ -1689,7 +1689,7 @@ void program()
 
     //call block
     block();
-
+    printf("token = %s\n", cur_token);
     //make sure program ends with period
     if(strcmp(cur_token, "periodsym") != 0)
         error(2, NULL);
@@ -1781,7 +1781,9 @@ void readFiles(int argc, char **argv)
 
     if(virtual_input)
     {
+
         printAssembly();
+
         //do_virtual_trace = 1;
         //virtualMachine(do_virtual_trace);
     }
