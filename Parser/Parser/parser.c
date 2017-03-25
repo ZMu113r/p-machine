@@ -97,7 +97,7 @@ int var_total = 0;
 int reg_count = 0;
 
 //all used for converting to assembly code
-int have_condition = 0;
+int have_condition = 0, have_while = 0;
 int saved_index;
 
 //find base
@@ -435,13 +435,18 @@ void error(int errNum, char *name)
             break;
 
         case 18:
-            printf("Error 18: Declaration Missing For %s\n", name);
+            printf("Error 18: Declaration Missing For %s.\n", name);
             exit(18);
             break;
 
         case 19:
             printf("Error 19: %s has already been declared.\n", name);
             exit(19);
+            break;
+
+        case 20:
+            printf("Error 20: %s is a constant and value cannot be reassigned.\n", name);
+            exit(20);
             break;
     }
 }
@@ -563,7 +568,7 @@ int process(char specialChar[], FILE *file, char digits[], char letters[])
             str[j] = c1;
         }
 
-        if( ( checkSpecial(specialChar, c2) && checkSpecial(specialChar, c1) ) && ( c1 == ':' || c1 == '<' || c1 == '>'))
+        if( ( checkSpecial(specialChar, c2) && checkSpecial(specialChar, c1) ) && ( c1 == ':' || c1 == '<' || c1 == '>' || c1 == '*' || c1 == '/'))
         {
 
                 c1 = c2;
@@ -578,7 +583,10 @@ int process(char specialChar[], FILE *file, char digits[], char letters[])
         str[j+1] = '\0';
 
         if(str[0] == '/' && str[1] == '*')
+        {
             in_comment = 1;
+            printf("in_comment is now activated.\n");
+        }
 
         if(!in_comment)
             if(contains(str[0], digits) || contains(str[0], letters) || contains(str[0], specialChar))
@@ -1386,7 +1394,10 @@ void statement()
             exit(21);
         }
 
-
+        struct Node *temp = lookUpSym(temp_Val.ident);
+        printf("temp sym = %d\n", temp->sym.kind);
+        if(temp->sym.kind == 1)
+            error(20, temp_Val.ident);
         getNextToken();
 
         //next symbol the must be the becomes, otherwise error
@@ -1427,7 +1438,7 @@ void statement()
         //continue to run statements until we hit something but a semicolon
         while(strcmp(cur_token, "semicolonsym") == 0)
         {
-            if(have_condition)
+            if(have_condition && !have_while)
             {
                 int offset = instructionCount - saved_index;
 
@@ -1440,6 +1451,17 @@ void statement()
             getNextToken();
 
             statement();
+        }
+
+        if(have_condition && !have_while)
+        {
+            int offset = instructionCount - saved_index;
+
+            printf("offset = %d\nCurrent = %d\n", offset, instructionCount);
+            code[instructionCount - offset].M = instructionCount+1;
+
+            have_condition = 0;
+            have_while = 0;
         }
 
         //ending symbol for after a begin must be end, else error
@@ -1491,6 +1513,7 @@ void statement()
     //current token is the while symbol
     else if(strcmp(cur_token, "whilesym") == 0)
     {
+        have_while = 1;
         getNextToken();
 
         //call condition for the while symbol
@@ -1732,6 +1755,7 @@ void readFiles(int argc, char **argv)
     {
         token_len = process(specialChar, scanner_input, digits, letters);
         tokenCheck(token_len, digits, letters);
+        printTokens(token_len);
     }
 
     else
