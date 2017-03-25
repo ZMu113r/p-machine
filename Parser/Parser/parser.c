@@ -1,3 +1,4 @@
+/* THIS CODE IS TRASH */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -52,6 +53,14 @@ typedef struct token
     char sym_name[20];
 
 } token;
+
+typedef struct nestyNest
+{
+    int counter;
+    int initialValues[99];
+    int conditions[99];
+} nestyNest;
+
 //gonna define all procedures here to allow the reader to wrap their mind around what I'm doing
 //also avoid implicit declaration:)
 void error(int errNum, char *name);
@@ -84,6 +93,7 @@ char cur_token [11];
 const unsigned int MAX_SYMBOLS = 10000;
 struct hash symbol_table[10000];
 struct Node insertingNode;
+nestyNest nestCounter;
 int addr;
 int test;
 temp temp_Val;
@@ -96,9 +106,7 @@ FILE *scanner_input, *parser_input, *virtual_input, *output;
 int var_total = 0;
 int reg_count = 0;
 
-//all used for converting to assembly code
-int have_condition = 0, have_while = 0;
-int saved_index;
+
 
 //find base
 int findBase(int L, int base, int stack[]){
@@ -206,7 +214,7 @@ void virtualMachine(int print)
     int opcode, line;
     while(halt == 0){
         line = PC;
-
+        //printf("here\n");
         // fetch the instruction
         IR = code[PC];
         PC++;
@@ -215,6 +223,7 @@ void virtualMachine(int print)
         // execute the instruction
         switch (opcode){
             case 1: // LIT
+
                 registers[IR.R] = IR.M;
                 break;
 
@@ -262,8 +271,7 @@ void virtualMachine(int print)
                 break;
 
             case 9: // SIO 1
-                if(print)
-                    printf("%d\n", registers[IR.R]);
+                printf("%d\n", registers[IR.R]);
                 break;
 
             case 10: // SIO 2
@@ -463,7 +471,12 @@ void convertToAssembly(int OP, int reg, int L, int M)
     code[instructionCount].M = M;
 
     if(OP == 8)
-        saved_index = instructionCount;
+    {
+        nestCounter.initialValues[nestCounter.counter] = instructionCount;
+        nestCounter.counter++;
+
+        printf("nestVal= %d\nnestCounter = %d\n", nestCounter.initialValues[nestCounter.counter-1], nestCounter.counter -1);
+    }
 
     instructionCount++;
 }
@@ -1040,7 +1053,7 @@ struct Node *insertNode(Symbol sym, struct Node *head)
 void getNextToken()
 {
     fscanf(parser_input, "%s", cur_token);
-    printf("current token = %s\n", cur_token);
+
     //scans next token as the identifier name
     if(strcmp(cur_token, "identsym") == 0)
         fscanf(parser_input, "%s", temp_Val.ident);
@@ -1235,6 +1248,8 @@ void expression()
 
         getNextToken();
 
+        term();
+
         if(strcmp(temp, "plussym") == 0)
         {
             convertToAssembly(13, reg_count-1, reg_count-1, reg_count);
@@ -1248,8 +1263,9 @@ void expression()
         }
     }
 
-    //call the term for the expression
-    term();
+    else
+    
+        term();
 
     //keep looping when adding or subtracting
     while(strcmp(cur_token, "plussym") == 0 || strcmp(cur_token, "minussym") == 0)
@@ -1280,8 +1296,6 @@ void expression()
 
 void condition()
 {
-
-    have_condition = 1;
     //current token is the odd symbol
     if(strcmp(cur_token, "oddsym") == 0)
     {
@@ -1395,7 +1409,7 @@ void statement()
         }
 
         struct Node *temp = lookUpSym(temp_Val.ident);
-        printf("temp sym = %d\n", temp->sym.kind);
+
         if(temp->sym.kind == 1)
             error(20, temp_Val.ident);
         getNextToken();
@@ -1438,44 +1452,48 @@ void statement()
         //continue to run statements until we hit something but a semicolon
         while(strcmp(cur_token, "semicolonsym") == 0)
         {
-            if(have_condition && !have_while)
+            if(nestCounter.counter > 0) {
+            if(nestCounter.conditions[nestCounter.counter-1] == 0)
             {
-                int offset = instructionCount - saved_index;
+                printf("Here.(1)\n");
+                nestCounter.counter--;
+                int offset = instructionCount - nestCounter.initialValues[nestCounter.counter];
 
-                printf("offset = %d\nCurrent = %d\n", offset, instructionCount);
                 code[instructionCount - offset].M = instructionCount;
 
-                have_condition = 0;
             }
-
+        }
             getNextToken();
 
             statement();
         }
 
-        if(have_condition && !have_while)
+        if(nestCounter.counter > 0){
+        if(nestCounter.conditions[nestCounter.counter-1] == 0)
         {
-            int offset = instructionCount - saved_index;
+            printf("Here.(2)\n");
+            nestCounter.counter--;
+            int offset = instructionCount - nestCounter.initialValues[nestCounter.counter];
 
-            printf("offset = %d\nCurrent = %d\n", offset, instructionCount);
-            code[instructionCount - offset].M = instructionCount+1;
+            code[instructionCount - offset].M = instructionCount;
 
-            have_condition = 0;
-            have_while = 0;
+        }
         }
 
         //ending symbol for after a begin must be end, else error
         if(strcmp(cur_token, "endsym") != 0)
             error(13, NULL);
 
-        if(have_condition)
+        if(nestCounter.counter > 0){
+        if(nestCounter.conditions[nestCounter.counter-1] != -1)
         {
-            int offset = instructionCount - saved_index;
+            printf("Here.(3)\n");
+            nestCounter.counter--;
+            int offset = instructionCount - nestCounter.initialValues[nestCounter.counter];
 
-            printf("offset = %d\nCurrent = %d\n", offset, instructionCount);
-            code[instructionCount - offset].M = instructionCount;
+            code[instructionCount - offset].M = instructionCount+1;
 
-            have_condition = 0;
+        }
         }
 
         getNextToken();
@@ -1491,6 +1509,7 @@ void statement()
 
         convertToAssembly(8, reg_count, 0, -1);
 
+        nestCounter.conditions[nestCounter.counter-1] = 0;
         //next symbol following the if is then, otherwise error
         if(strcmp(cur_token, "thensym") != 0)
             error(14, NULL);
@@ -1513,14 +1532,13 @@ void statement()
     //current token is the while symbol
     else if(strcmp(cur_token, "whilesym") == 0)
     {
-        have_while = 1;
         getNextToken();
 
         //call condition for the while symbol
         condition();
 
         convertToAssembly(8, reg_count, 0, -1);
-
+        nestCounter.conditions[nestCounter.counter-1] = 1;
         //must be followed by do symbol, else error
         if(strcmp(cur_token, "dosym") != 0)
             error(15, NULL);
@@ -1530,7 +1548,7 @@ void statement()
         statement();
 
         //IMPORTANT DO NOT FORGET ABOUT THIS
-        convertToAssembly(7, 0, 0, saved_index-3);
+        convertToAssembly(7, 0, 0, nestCounter.initialValues[nestCounter.counter]-3);
     }
 
     else if(strcmp(cur_token, "writesym") == 0 || strcmp(cur_token, "readsym") == 0)
@@ -1569,6 +1587,8 @@ void statement()
         {
             convertToAssembly(10, reg_count, 0, 2);
             reg_count++;
+            convertToAssembly(4, reg_count-1, 0, lookUpSym(temp_Val.ident)->sym.addr);
+            reg_count--;
         }
 
         getNextToken();
@@ -1809,7 +1829,7 @@ void readFiles(int argc, char **argv)
         printAssembly();
 
         //do_virtual_trace = 1;
-        //virtualMachine(do_virtual_trace);
+        virtualMachine(do_virtual_trace);
     }
 
     else
@@ -1820,6 +1840,10 @@ void readFiles(int argc, char **argv)
 int main(int argc, char **argv)
 {
     addr = 4;
+    nestCounter.counter = 0;
+
+    for(int i = 0; i < 99; i++)
+        nestCounter.conditions[i] = -1;
 
     //start reading the tokens file
     readFiles(argc, argv);
