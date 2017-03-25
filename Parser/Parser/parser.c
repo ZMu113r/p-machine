@@ -58,8 +58,8 @@ void error(int errNum, char *name);
 struct Node* createNode(Symbol s);
 Symbol *createSymbol(int kind, char *name, int val, int level, int addr);
 struct Node *insertNode(Symbol sym, struct Node *head);
-int compareSymbols(Symbol s1, Symbol s2);
-int destroyNode(Symbol s, struct Node *head);
+//int compareSymbols(Symbol s1, Symbol s2);
+//int destroyNode(Symbol s, struct Node *head);
 void getNextToken();
 unsigned int hashValue(char *str, unsigned int len);
 int lookUp(char *name);
@@ -186,9 +186,7 @@ void virtualMachine(int print)
         fscanf(virtual_input, "%d %d %d %d", &code[count].OP, &code[count].R, &code[count].L, &code[count].M);
         count++;
     }
-
     fclose(virtual_input);
-
     */
 
 
@@ -200,7 +198,6 @@ void virtualMachine(int print)
         printf("%d\t%s\t%d\t%d\t%d\n", i, getInstructName(code[i].OP), code[i].R, code[i].L, code[i].M);
     }
     printf("\n");
-
     */
     // Output headers for the stack printout
     if(print)
@@ -891,7 +888,10 @@ int checkRelations(char* str)
     {
         return 1;
     }
+
+    return 0;
 }
+
 //creates a Node and returns it
 struct Node *createNode(Symbol s)
 {
@@ -959,7 +959,7 @@ struct Node *insertNode(Symbol sym, struct Node *head)
 
 //checks if two symbols are the same
 //returns 0 if they are, -1 if they are not
-int compareSymbols(Symbol s1, Symbol s2)
+/*int compareSymbols(Symbol s1, Symbol s2)
 {
     //all symbols have a kind, and can only be compared if they have the same kind
     if(s1.kind == s2.kind)
@@ -987,11 +987,11 @@ int compareSymbols(Symbol s1, Symbol s2)
         }
 
     }
-}
+}*/
 
 //destroy's target node in linked list
 //returns 0 if found, 1 otherwise
-int destroyNode(Symbol s, struct Node *head)
+/*int destroyNode(Symbol s, struct Node *head)
 {
     var_total--;
 
@@ -1026,16 +1026,16 @@ int destroyNode(Symbol s, struct Node *head)
 
     //we found it
     return 0;
-}
+}*/
 
 //this read the next token in the output
 void getNextToken()
 {
-    fscanf(parser_input, "%s", &cur_token);
+    fscanf(parser_input, "%s", cur_token);
 
     //scans next token as the identifier name
     if(strcmp(cur_token, "identsym") == 0)
-        fscanf(parser_input, "%s", &temp_Val.ident);
+        fscanf(parser_input, "%s", temp_Val.ident);
 
     //scans the number into the identifier value
     else if(strcmp(cur_token, "numbersym") == 0)
