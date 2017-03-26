@@ -106,7 +106,33 @@ int stack[MAX_STACK_HEIGHT] = {0};
 FILE *scanner_input, *parser_input, *virtual_input, *output;
 int var_total = 0;
 int reg_count = 0;
+int flag = 0;
+char reservedwords[12][20];
 
+void initializeReserves()
+{
+    strcpy(reservedwords[0], "constsym");
+    strcpy(reservedwords[1], "varsym");
+    strcpy(reservedwords[2], "beginsym");
+    strcpy(reservedwords[3], "endsym");
+    strcpy(reservedwords[4], "ifsym");
+    strcpy(reservedwords[5], "thensym");
+    strcpy(reservedwords[6], "whilesym");
+    strcpy(reservedwords[7], "dosym");
+    strcpy(reservedwords[8], "readsym");
+    strcpy(reservedwords[9], "writesym");
+    strcpy(reservedwords[10], "oddsym");
+    strcpy(reservedwords[11], "proceduresym");
+}
+
+void searchReserves()
+{
+    for(int i = 0; i < 12; i++)
+    {
+        if(strcmp(cur_token, reservedwords[i]) == 0)
+            error(23, "");
+    }
+}
 
 void decrementCount()
 {
@@ -470,6 +496,10 @@ void error(int errNum, char *name)
             printf("Error 22: Constant cannot change value.\n");
             exit(22);
             break;
+        case 23:
+            printf("Error 23: A variable declared is a reserved word.\n");
+            exit(23);
+            break;
     }
 }
 
@@ -493,6 +523,7 @@ void convertToAssembly(int OP, int reg, int L, int M)
     }
 
     instructionCount++;
+    printf("here.\n");
 }
 
 void printAssembly()
@@ -597,7 +628,6 @@ int process(char specialChar[], FILE *file, char digits[], char letters[])
 
         if( ( checkSpecial(specialChar, c2) && checkSpecial(specialChar, c1) ) && ( c1 == ':' || c1 == '<' || c1 == '>' || c1 == '*' || c1 == '/'))
         {
-
                 if((c1 == ':' && c2 == '=') || (c1 == '<' && c2 == '>') || (c1 == '<' && c2 == '=') || (c1 == '>' && c2 == '=') || (c1 == '*' && c2 == '/') || (c1 == '/' && c2 == '*'))
                 {
                     c1 = c2;
@@ -1407,6 +1437,7 @@ void condition()
 
 void statement()
 {
+    printf("INSTRUCT = %d with token %s\n", instructionCount, cur_token);
     //check to see if the current token is the identifier symbol
     if(strcmp(cur_token, "identsym") == 0)
     {
@@ -1474,6 +1505,7 @@ void statement()
             if(nestCounter.conditions[nestCounter.counter-1] == 0)
             {
                 printf("Here.(1)\n");
+                printf("nestCounter(1) = %d\n", nestCounter.counter);
                 nestCounter.counter--;
                 int offset = instructionCount - nestCounter.initialValues[nestCounter.counter];
 
@@ -1486,32 +1518,42 @@ void statement()
             statement();
         }
 
-        if(nestCounter.counter > 0){
-        if(nestCounter.conditions[nestCounter.counter-1] == 0)
-        {
-            printf("Here.(2)\n");
-            nestCounter.counter--;
-            int offset = instructionCount - nestCounter.initialValues[nestCounter.counter];
-
-            code[instructionCount - offset].M = instructionCount;
-
-        }
-        }
 
         //ending symbol for after a begin must be end, else error
         if(strcmp(cur_token, "endsym") != 0)
             error(13, NULL);
 
-        if(nestCounter.counter > 0){
-        if(nestCounter.conditions[nestCounter.counter-1] != -1)
+        if(nestCounter.conditions[nestCounter.counter-1] == 0 && nestCounter.counter > 0)
         {
-            printf("Here.(3)\n");
+            printf("Here.(2)\n");
+            printf("nestCounter(2) = %d\n", nestCounter.counter);
+            printf("instructionCount(2) = %d\n", instructionCount);
             nestCounter.counter--;
             int offset = instructionCount - nestCounter.initialValues[nestCounter.counter];
-
-            code[instructionCount - offset].M = instructionCount+1;
+            printf("Offset = %d\n", offset);
+            code[instructionCount - offset].M = instructionCount;
 
         }
+
+        else if(nestCounter.conditions[nestCounter.counter-1] == 1 && nestCounter.counter > 0)
+        {
+            printf("Here.(3)\n");
+            printf("instructionCount(3) = %d\n", instructionCount);
+            printf("TOKERNEASGNFSD: %s\n", cur_token);
+            nestCounter.counter--;
+
+            int offset = instructionCount - nestCounter.initialValues[nestCounter.counter];
+
+            /*if(nestCounter.counter-1 == 1)
+            {
+                instructionCount++;
+            }*/
+
+            if(!flag)
+                code[instructionCount - offset].M = instructionCount+1;
+            else
+                code[instructionCount - offset].M = instructionCount;
+
         }
 
         getNextToken();
@@ -1565,8 +1607,15 @@ void statement()
 
         statement();
 
-        //IMPORTANT DO NOT FORGET ABOUT THIS
-        convertToAssembly(7, 0, 0, nestCounter.initialValues[nestCounter.counter]-3);
+        flag = 1;
+        printf("Token5e432: %s\n", cur_token);
+
+        printf("INSTRUCTIONS: %d\n", instructionCount);
+
+        if(nestCounter.counter == 0)
+            convertToAssembly(7, 0, 0, nestCounter.initialValues[nestCounter.counter]-3);
+        else
+            convertToAssembly(7, 0, 0, nestCounter.initialValues[nestCounter.counter-1]-3);
     }
 
     else if(strcmp(cur_token, "writesym") == 0 || strcmp(cur_token, "readsym") == 0)
@@ -1635,6 +1684,7 @@ void constant_Declaration()
     {
         getNextToken();
         //check to make sure next token is the identifer
+        //check to make sure next token is the identifer
         if(strcmp(cur_token, "identsym") != 0)
             error(3, NULL);
 
@@ -1650,6 +1700,8 @@ void constant_Declaration()
         //we know the next token needs to be a number
         if(strcmp(cur_token, "numbersym") != 0)
             error(5, NULL);
+
+        searchReserves();
 
         //insert into hash table
         insertHash(1, temp_Val.ident, temp_Val.val, 0, addr++);
@@ -1680,6 +1732,8 @@ void var_Declaration()
     while(condition)
     {
         getNextToken();
+
+        searchReserves();
 
         //check for identifier symbol
         if(strcmp(cur_token, "identsym") != 0)
@@ -1714,6 +1768,8 @@ void proc_Declaration()
     //check for the identifier symbol, else error
     if(strcmp(cur_token, "identsym") != 0)
         error(8, NULL);
+
+    searchReserves();
 
     //inserts into the hashtable
     insertHash(3, temp_Val.ident, 0, 0, addr++);
@@ -1870,6 +1926,7 @@ int main(int argc, char **argv)
 {
     addr = 4;
     nestCounter.counter = 0;
+    initializeReserves();
 
     for(int i = 0; i < 99; i++)
         nestCounter.conditions[i] = -1;
