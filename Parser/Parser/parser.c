@@ -1250,16 +1250,10 @@ void expression()
 
         term();
 
-        if(strcmp(temp, "plussym") == 0)
+        if(strcmp(temp, "minussym") == 0)
         {
-            convertToAssembly(13, reg_count-1, reg_count-1, reg_count);
-            reg_count--;
-        }
-
-        else
-        {
-            convertToAssembly(14, reg_count - 1, reg_count-1, reg_count);
-            reg_count--;
+            convertToAssembly(12, reg_count-1, reg_count-1, 0);
+            //reg_count--;
         }
     }
 
@@ -1587,6 +1581,7 @@ void statement()
         {
             convertToAssembly(10, reg_count, 0, 2);
             reg_count++;
+    
             convertToAssembly(4, reg_count-1, 0, lookUpSym(temp_Val.ident)->sym.addr);
             reg_count--;
         }
