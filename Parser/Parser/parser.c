@@ -87,6 +87,7 @@ void program();
 void readFile();
 int findBase(int, int, int[]);
 char * getInstructName(int);
+void decrementCount();
 
 //needed global variables for all functions
 char cur_token [11];
@@ -107,6 +108,11 @@ int var_total = 0;
 int reg_count = 0;
 
 
+void decrementCount()
+{
+    if(reg_count > 0)
+        reg_count--;
+}
 
 //find base
 int findBase(int L, int base, int stack[]){
@@ -456,6 +462,14 @@ void error(int errNum, char *name)
             printf("Error 20: %s is a constant and value cannot be reassigned.\n", name);
             exit(20);
             break;
+        case 21:
+            printf("Error 21: Semicolon or comma missing after assignment.\n");
+            exit(21);
+            break;
+        case 22:
+            printf("Error 22: Constant cannot change value.\n");
+            exit(22);
+            break;
     }
 }
 
@@ -584,13 +598,17 @@ int process(char specialChar[], FILE *file, char digits[], char letters[])
         if( ( checkSpecial(specialChar, c2) && checkSpecial(specialChar, c1) ) && ( c1 == ':' || c1 == '<' || c1 == '>' || c1 == '*' || c1 == '/'))
         {
 
-                c1 = c2;
-                c2 = fgetc(file);
+                if((c1 == ':' && c2 == '=') || (c1 == '<' && c2 == '>') || (c1 == '<' && c2 == '=') || (c1 == '>' && c2 == '=') || (c1 == '*' && c2 == '/') || (c1 == '/' && c2 == '*'))
+                {
+                    c1 = c2;
+                    c2 = fgetc(file);
 
-                if(checkSpecial(specialChar, c1)){
-                    j++;
-                    str[j] = c1;
+                    if(checkSpecial(specialChar, c1) ){
+                        j++;
+                        str[j] = c1;
+                    }
                 }
+
         }
 
         str[j+1] = '\0';
@@ -849,19 +867,22 @@ void tokenCheck(int length, char digits[], char letters[])
 
             else if(contains(tokens[i].name[0], digits))
             {
+
                 if(strlen(tokens[i].name) > 5)
                 {
                     printf("The number %s is too long.\n", tokens[i].name);
                     exit(1);
                 }
-                for(int i = 1; i < strlen(tokens[i].name); i++)
+
+                for(int k = 1; i < strlen(tokens[i].name); i++)
                 {
-                    if(!contains(tokens[i].name[i], digits) && strlen(tokens[i].name) <= 5)
+                    if(!contains(tokens[i].name[k], digits) && strlen(tokens[i].name) <= 5)
                         dig_flag = 1;
 
 
                 }
 
+                printf("DIGIT FLAG = %d\n", dig_flag);
                 if(!dig_flag)
                 {
                     tokens[i].id = 3;
@@ -1204,6 +1225,12 @@ void factor()
 
         getNextToken();
     }
+
+    else
+    {
+        printf("Error 23: Token %s is not a number, identifier, or lparenthesis.\n", cur_token);
+        exit(23);
+    }
 }
 
 void term()
@@ -1224,13 +1251,13 @@ void term()
         if(strcmp(temp, "multsym") == 0)
         {
             convertToAssembly(15, temp_reg-1, temp_reg-1, temp_reg);
-            reg_count--;
+            decrementCount();
         }
 
         else
         {
             convertToAssembly(16, temp_reg - 1, temp_reg-1, temp_reg);
-            reg_count--;
+            decrementCount();
         }
 
     }
@@ -1250,21 +1277,12 @@ void expression()
 
         term();
 
-        if(strcmp(temp, "plussym") == 0)
-        {
-            convertToAssembly(13, reg_count-1, reg_count-1, reg_count);
-            reg_count--;
-        }
-
-        else
-        {
-            convertToAssembly(14, reg_count - 1, reg_count-1, reg_count);
-            reg_count--;
-        }
+        if(strcmp(temp, "minussym") == 0)
+            convertToAssembly(12, reg_count-1, reg_count-1, 0);
     }
 
     else
-    
+
         term();
 
     //keep looping when adding or subtracting
@@ -1281,13 +1299,13 @@ void expression()
         if(strcmp(temp, "plussym") == 0)
         {
             convertToAssembly(13, temp_reg-1, temp_reg-1, temp_reg);
-            reg_count--;
+            decrementCount();
         }
 
         else
         {
             convertToAssembly(14, temp_reg-1, temp_reg-1, temp_reg);
-            reg_count--;
+            decrementCount();
         }
 
     }
@@ -1305,7 +1323,7 @@ void condition()
         expression();
 
         convertToAssembly(17, reg_count-1, 0, 0);
-        reg_count--;
+        decrementCount();
     }
 
     else
@@ -1321,9 +1339,9 @@ void condition()
             //call expression again after relation
             expression();
 
-            reg_count--;
+            decrementCount();
             convertToAssembly(19, reg_count-1, reg_count-1, reg_count);
-            reg_count--;
+            decrementCount();
 
         }
 
@@ -1333,9 +1351,9 @@ void condition()
 
              expression();
 
-             reg_count--;
+             decrementCount();
              convertToAssembly(20, reg_count-1, reg_count-1, reg_count);
-             reg_count--;
+             decrementCount();
         }
 
         else if(strcmp(cur_token, "lessym") == 0)
@@ -1344,9 +1362,9 @@ void condition()
 
             expression();
 
-            reg_count--;
+            decrementCount();
             convertToAssembly(21, reg_count-1, reg_count-1, reg_count);
-            reg_count--;
+            decrementCount();
         }
 
         else if(strcmp(cur_token, "leqsym") == 0)
@@ -1355,9 +1373,9 @@ void condition()
 
             expression();
 
-            reg_count--;
+            decrementCount();
             convertToAssembly(22, reg_count-1, reg_count-1, reg_count);
-            reg_count--;
+            decrementCount();
         }
 
         else if(strcmp(cur_token, "gtrsym") == 0)
@@ -1366,9 +1384,9 @@ void condition()
 
             expression();
 
-            reg_count--;
+            decrementCount();
             convertToAssembly(23, reg_count - 1, reg_count-1, reg_count);
-            reg_count--;
+            decrementCount();
         }
 
         else if(strcmp(cur_token, "geqsym") == 0)
@@ -1377,9 +1395,9 @@ void condition()
 
             expression();
 
-            reg_count--;
+            decrementCount();
             convertToAssembly(24, reg_count-1, reg_count-1, reg_count);
-            reg_count--;
+           decrementCount();
         }
 
         else
@@ -1424,7 +1442,7 @@ void statement()
         //call expression
         expression();
 
-        reg_count--;
+        decrementCount();
         convertToAssembly(4, reg_count, 0, lookUpSym(saved_ident)->sym.addr);
 
     }
@@ -1579,16 +1597,27 @@ void statement()
 
         if(strcmp(temp, "writesym") == 0)
         {
-            convertToAssembly(3, reg_count, 0, lookUpSym(temp_Val.ident)->sym.addr);
+
+            if(lookUpSym(temp_Val.ident)->sym.kind == 1)
+                convertToAssembly(1, reg_count, 0, lookUpSym(temp_Val.ident)->sym.val);
+
+            else if(lookUpSym(temp_Val.ident)->sym.kind == 2)
+                convertToAssembly(3, reg_count, 0, lookUpSym(temp_Val.ident)->sym.addr);
+
+
             convertToAssembly(9, reg_count, 0, 1);
         }
 
         else
         {
+
+            if(lookUpSym(temp_Val.ident)->sym.kind == 1)
+                error(22, "");
+
             convertToAssembly(10, reg_count, 0, 2);
             reg_count++;
             convertToAssembly(4, reg_count-1, 0, lookUpSym(temp_Val.ident)->sym.addr);
-            reg_count--;
+            decrementCount();
         }
 
         getNextToken();
@@ -1732,7 +1761,7 @@ void program()
 
     //call block
     block();
-    printf("token = %s\n", cur_token);
+
     //make sure program ends with period
     if(strcmp(cur_token, "periodsym") != 0)
         error(2, NULL);
