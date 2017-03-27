@@ -1,12 +1,14 @@
-var y, x;
+/*
+ * Negate.pl0
+ * Does a bunch of redundant operations to negate the input, then outputs it.
+ * Output: The negation of the value entered.
+ */
+
+var x;
+
 begin
-	y := 6;
-	while y > 0 do
-	begin 
-	x := y*y;
-	y := y - 1;
-	write x;
-	end;
-write y;
-write x;
+	read x;
+	/* x := -(-1 * -x * -1) / -1; was the original */
+       x := -((-1) * (-x) * (-1)) / (-1); /* probably follows grammar rules better */
+	write x
 end.

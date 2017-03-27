@@ -1,4 +1,9 @@
-/* THIS CODE IS TRASH */
+/*
+Lilly Jackson
+Zack Muller
+Aaron Hebson
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -48,7 +53,7 @@ typedef struct instruction
 
 typedef struct token
 {
-    char name[11];
+    char name[20];
     int id;
     char sym_name[20];
 
@@ -221,24 +226,6 @@ void virtualMachine(int print)
 
     int count = 0;
 
-    /*
-    while(!feof(virtual_input)){
-        fscanf(virtual_input, "%d %d %d %d", &code[count].OP, &code[count].R, &code[count].L, &code[count].M);
-        count++;
-    }
-    fclose(virtual_input);
-    */
-
-
-    /*
-    // Output the program in assembly language with line numbers
-    printf("Line\tOP\tR\tL\tM\n");
-    int i;
-    for(i=0; i<count; i++){
-        printf("%d\t%s\t%d\t%d\t%d\n", i, getInstructName(code[i].OP), code[i].R, code[i].L, code[i].M);
-    }
-    printf("\n");
-    */
     // Output headers for the stack printout
     if(print)
         printf("Initial Values\t\t\t\tpc\tbp\tsp\n");
@@ -387,6 +374,7 @@ void virtualMachine(int print)
 // A neat function for error printing
 void error(int errNum, char *name)
 {
+    printf("Entering error function\n");
     switch(errNum)
     {
         case 1:
@@ -519,11 +507,10 @@ void convertToAssembly(int OP, int reg, int L, int M)
         nestCounter.initialValues[nestCounter.counter] = instructionCount;
         nestCounter.counter++;
 
-        printf("nestVal= %d\nnestCounter = %d\n", nestCounter.initialValues[nestCounter.counter-1], nestCounter.counter -1);
     }
 
     instructionCount++;
-    printf("here.\n");
+
 }
 
 void printAssembly()
@@ -546,7 +533,6 @@ void printFile(){
         temp = fgetc(file);
     }
 
-    printf("\n\nLexeme\tToken Type\n");
     fclose(file);
 }
 
@@ -644,10 +630,7 @@ int process(char specialChar[], FILE *file, char digits[], char letters[])
         str[j+1] = '\0';
 
         if(str[0] == '/' && str[1] == '*')
-        {
             in_comment = 1;
-            printf("in_comment is now activated.\n");
-        }
 
         if(!in_comment)
             if(contains(str[0], digits) || contains(str[0], letters) || contains(str[0], specialChar))
@@ -794,6 +777,7 @@ void tokenCheck(int length, char digits[], char letters[])
         {
             tokens[i].id = 21;
             strcpy(tokens[i].sym_name, "beginsym ");
+            printf("name = %s\n", tokens[i].name);
         }
 
         else if(strcmp(tokens[i].name, "end") == 0)
@@ -870,20 +854,19 @@ void tokenCheck(int length, char digits[], char letters[])
 
 
         else{
-            //printf("Token: %s\tSize: %d\tFunction: %d\tCharacter: %c\n", tokens[i].name, strlen(tokens[i].name),
-                   //contains(tokens[i].name[0], letters), tokens[i].name[0]);
+
+            printf("FUCK = %d\n", strcmp(tokens[i].name, "begin"));
             if(contains(tokens[i].name[0], letters))
             {
-                for(int i = 1; i < strlen(tokens[i].name); i++)
+                for(int k = 1; i < strlen(tokens[k].name); i++)
                 {
-
-                    if(strlen(tokens[i].name) > 11)
+                    if(strlen(tokens[k].name) > 11)
                     {
                         printf("The variable %s is too long.\n", tokens[i].name);
                         exit(1);
                     }
 
-                    if(!contains(tokens[i].name[i], digits) && !contains(tokens[i].name[i], letters))
+                    if(!contains(tokens[k].name[i], digits) && !contains(tokens[k].name[i], letters))
                         var_flag = 1;
                 }
 
@@ -912,7 +895,6 @@ void tokenCheck(int length, char digits[], char letters[])
 
                 }
 
-                printf("DIGIT FLAG = %d\n", dig_flag);
                 if(!dig_flag)
                 {
                     tokens[i].id = 3;
@@ -926,12 +908,6 @@ void tokenCheck(int length, char digits[], char letters[])
                 printf("Token %s is not found.\n", tokens[i].name);
                 exit(1);
             }
-
-            /*if(var_flag || dig_flag)
-            {
-                printf("Token %s is not found.\n", tokens[i].name);
-                exit(1);
-            }*/
 
         }
 
@@ -1028,77 +1004,6 @@ struct Node *insertNode(Symbol sym, struct Node *head)
     //return this temp
     return temp;
 }
-
-//checks if two symbols are the same
-//returns 0 if they are, -1 if they are not
-/*int compareSymbols(Symbol s1, Symbol s2)
-{
-    //all symbols have a kind, and can only be compared if they have the same kind
-    if(s1.kind == s2.kind)
-    {
-        //constant symbols
-        if(s1.kind == 1)
-        {
-            //they are the same
-            if(strcmp(s1.name, s2.name) == 0 && s1.val == s2.val)
-                return 0;
-
-            //otherwise they are different
-            return -1;
-        }
-
-        //variable symbols or procedure
-        else
-        {
-            //they are the same
-            if(strcmp(s1.name, s2.name) == 0 && s1.level == s2.level && s1.addr == s2.addr)
-                return 0;
-
-            //otherwise they are not the same
-            return -1;
-        }
-
-    }
-}*/
-
-//destroy's target node in linked list
-//returns 0 if found, 1 otherwise
-/*int destroyNode(Symbol s, struct Node *head)
-{
-    var_total--;
-
-    //use temp node
-    struct Node *temp = head;
-
-    //keep track of prev node with walking through list
-    struct Node *prev;
-
-    //continue to loop till we find the correct symbol
-    while(compareSymbols(temp->sym, s) < 0)
-    {
-        //set the prev to cur
-        prev = temp;
-
-        //if we arrive at the end, the node was not found
-        if(temp->next == NULL)
-        {
-            printf("Node not found.\n");
-            return - 1;
-        }
-
-        //update cur
-        temp = temp->next;
-    }
-
-    //relink the linked list
-    prev->next = temp->next;
-
-    //free the unreachable node
-    free(temp);
-
-    //we found it
-    return 0;
-}*/
 
 //this read the next token in the output
 void getNextToken()
@@ -1207,7 +1112,6 @@ void insertHash(int kind, char *name, int value, int level, int addr)
     //insert into list
     symbol_table[hash].head = insertNode(sym, symbol_table[hash].head);
 
-    printf("Insert Complete.\n");
 }
 
 void factor()
@@ -1437,11 +1341,9 @@ void condition()
 
 void statement()
 {
-    printf("INSTRUCT = %d with token %s\n", instructionCount, cur_token);
     //check to see if the current token is the identifier symbol
     if(strcmp(cur_token, "identsym") == 0)
     {
-
         char saved_ident[11];
 
         strcpy(saved_ident, temp_Val.ident);
@@ -1453,6 +1355,7 @@ void statement()
         //error this out
         if(answer < 0)
         {
+            printf("temp_Val.ident = %s\n", temp_Val.ident);
             printf("Error 21: %s is not declared.\n", temp_Val.ident);
             exit(21);
         }
@@ -1504,8 +1407,6 @@ void statement()
             if(nestCounter.counter > 0) {
             if(nestCounter.conditions[nestCounter.counter-1] == 0)
             {
-                printf("Here.(1)\n");
-                printf("nestCounter(1) = %d\n", nestCounter.counter);
                 nestCounter.counter--;
                 int offset = instructionCount - nestCounter.initialValues[nestCounter.counter];
 
@@ -1525,29 +1426,18 @@ void statement()
 
         if(nestCounter.conditions[nestCounter.counter-1] == 0 && nestCounter.counter > 0)
         {
-            printf("Here.(2)\n");
-            printf("nestCounter(2) = %d\n", nestCounter.counter);
-            printf("instructionCount(2) = %d\n", instructionCount);
             nestCounter.counter--;
             int offset = instructionCount - nestCounter.initialValues[nestCounter.counter];
-            printf("Offset = %d\n", offset);
+
             code[instructionCount - offset].M = instructionCount;
 
         }
 
         else if(nestCounter.conditions[nestCounter.counter-1] == 1 && nestCounter.counter > 0)
         {
-            printf("Here.(3)\n");
-            printf("instructionCount(3) = %d\n", instructionCount);
-            printf("TOKERNEASGNFSD: %s\n", cur_token);
             nestCounter.counter--;
 
             int offset = instructionCount - nestCounter.initialValues[nestCounter.counter];
-
-            /*if(nestCounter.counter-1 == 1)
-            {
-                instructionCount++;
-            }*/
 
             if(!flag)
                 code[instructionCount - offset].M = instructionCount+1;
@@ -1570,6 +1460,7 @@ void statement()
         convertToAssembly(8, reg_count, 0, -1);
 
         nestCounter.conditions[nestCounter.counter-1] = 0;
+
         //next symbol following the if is then, otherwise error
         if(strcmp(cur_token, "thensym") != 0)
             error(14, NULL);
@@ -1578,14 +1469,6 @@ void statement()
 
         //call statement for the if statement
         statement();
-
-        //optional else statement
-        //if(strcmp(token, "elsesym") == 0)
-        //{
-            //getNextToken();
-
-            //statement();
-        //}
 
     }
 
@@ -1599,6 +1482,7 @@ void statement()
 
         convertToAssembly(8, reg_count, 0, -1);
         nestCounter.conditions[nestCounter.counter-1] = 1;
+
         //must be followed by do symbol, else error
         if(strcmp(cur_token, "dosym") != 0)
             error(15, NULL);
@@ -1608,9 +1492,6 @@ void statement()
         statement();
 
         flag = 1;
-        printf("Token5e432: %s\n", cur_token);
-
-        printf("INSTRUCTIONS: %d\n", instructionCount);
 
         if(nestCounter.counter == 0)
             convertToAssembly(7, 0, 0, nestCounter.initialValues[nestCounter.counter]-3);
@@ -1802,11 +1683,11 @@ void block()
     if(strcmp(cur_token, "varsym") == 0)
         var_Declaration();
 
+
     //procedure declaration
     while(strcmp(cur_token, "procsym") == 0)
         proc_Declaration();
 
-    printf("var_total = %d\n", var_total);
     convertToAssembly(6, 0, 0, 4+var_total);
     statement();
 }
@@ -1827,7 +1708,6 @@ void program()
 //this read the file, general
 void readFiles(int argc, char **argv)
 {
-
     //used for scanner program
     char specialChar[13] = {'+','-','*','/','(',')','=',',','.','<','>',';',':'};
     char digits[10] = {'0','1','2', '3', '4', '5', '6', '7', '8', '9'};
@@ -1860,7 +1740,6 @@ void readFiles(int argc, char **argv)
     {
         token_len = process(specialChar, scanner_input, digits, letters);
         tokenCheck(token_len, digits, letters);
-        printTokens(token_len);
     }
 
     else
@@ -1909,13 +1788,7 @@ void readFiles(int argc, char **argv)
     virtual_input = fopen("input3.txt", "r");
 
     if(virtual_input)
-    {
-
-        printAssembly();
-
-        //do_virtual_trace = 1;
         virtualMachine(do_virtual_trace);
-    }
 
     else
         error(1, NULL);
