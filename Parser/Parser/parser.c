@@ -777,7 +777,6 @@ void tokenCheck(int length, char digits[], char letters[])
         {
             tokens[i].id = 21;
             strcpy(tokens[i].sym_name, "beginsym ");
-            printf("name = %s\n", tokens[i].name);
         }
 
         else if(strcmp(tokens[i].name, "end") == 0)
@@ -855,7 +854,6 @@ void tokenCheck(int length, char digits[], char letters[])
 
         else{
 
-            printf("FUCK = %d\n", strcmp(tokens[i].name, "begin"));
             if(contains(tokens[i].name[0], letters))
             {
                 for(int k = 1; i < strlen(tokens[k].name); i++)
