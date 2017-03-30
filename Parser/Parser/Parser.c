@@ -7,6 +7,7 @@ Aaron Hebson
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 
 #define MAX_STACK_HEIGHT 2000
@@ -636,7 +637,6 @@ int process(char specialChar[], FILE *file, char digits[], char letters[])
 
         if(!in_comment)
             if(contains(str[0], digits) || contains(str[0], letters) || contains(str[0], specialChar)){
-                printf("STR is %s\n", str);
                 strcpy(tokens[i++].name, str);
             }
 
@@ -668,7 +668,6 @@ void tokenCheck(int length, char digits[], char letters[])
 
     for(int i = 0; i < length; i++)
     {
-        printf("Name of token: %s\n", tokens[i].name);
         if(strcmp(tokens[i].name, "null") == 0)
         {
             tokens[i].id = 1;
@@ -1013,8 +1012,6 @@ struct Node *insertNode(Symbol sym, struct Node *head)
 void getNextToken()
 {
     fscanf(parser_input, "%s", cur_token);
-
-    printf("%s\n", cur_token);
 
     //scans next token as the identifier name
     if(strcmp(cur_token, "identsym") == 0)
@@ -1761,7 +1758,6 @@ void readFiles(int argc, char **argv)
     //write the tokens to that file
     for(int i = 0; i < token_len; i++)
     {
-        printf("token[%d] = %s\n", i, tokens[i].sym_name);
         fprintf(parser_input, "%s", tokens[i].sym_name);
 
         //output the variable or numbers
