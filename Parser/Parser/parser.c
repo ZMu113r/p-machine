@@ -7,7 +7,7 @@ Aaron Hebson
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <ctype.h>
 
 #define MAX_STACK_HEIGHT 2000
 #define MAX_CODE_LENGTH 500
@@ -72,8 +72,8 @@ void error(int errNum, char *name);
 struct Node* createNode(Symbol s);
 Symbol *createSymbol(int kind, char *name, int val, int level, int addr);
 struct Node *insertNode(Symbol sym, struct Node *head);
-//int compareSymbols(Symbol s1, Symbol s2);
-//int destroyNode(Symbol s, struct Node *head);
+int process(char specialChar[], FILE *file);
+void tokenCheck(int len);
 void getNextToken();
 unsigned int hashValue(char *str, unsigned int len);
 int lookUp(char *name);
@@ -374,7 +374,6 @@ void virtualMachine(int print)
 // A neat function for error printing
 void error(int errNum, char *name)
 {
-    printf("Entering error function\n");
     switch(errNum)
     {
         case 1:
@@ -550,14 +549,15 @@ int contains(char c, char alpha[])
 {
     for(int i = 0; i < strlen(alpha); i++)
     {
-        if(c == alpha[i])
+        if(c == alpha[i]){
             return 1;
+        }
     }
 
     return 0;
 }
 
-int process(char specialChar[], FILE *file, char digits[], char letters[])
+int process(char specialChar[], FILE *file)
 {
     //declare things we will use in this function
     char c1, c2;
@@ -581,7 +581,7 @@ int process(char specialChar[], FILE *file, char digits[], char letters[])
 
             //the case where the user is stupid and puts too long of
             //a string
-            if(j == 11 && (contains(str[0], digits) || contains(str[0], letters) || contains(str[0], specialChar))){
+            if(j == 11 && (isdigit(str[0]) || isalpha(str[0]) || contains(str[0], specialChar))){
                 printf("The string %s is too long to process, please revisit your code.", str);
                 exit(2);
             }
@@ -624,7 +624,6 @@ int process(char specialChar[], FILE *file, char digits[], char letters[])
                         str[j] = c1;
                     }
                 }
-
         }
 
         str[j+1] = '\0';
@@ -633,8 +632,9 @@ int process(char specialChar[], FILE *file, char digits[], char letters[])
             in_comment = 1;
 
         if(!in_comment)
-            if(contains(str[0], digits) || contains(str[0], letters) || contains(str[0], specialChar))
+            if(isdigit(str[0]) || isalpha(str[0]) || contains(str[0], specialChar)){
                 strcpy(tokens[i++].name, str);
+            }
 
         if(str[1] == '/' && str[0] == '*')
             in_comment = 0;
@@ -658,7 +658,7 @@ void printTokens(int len)
         printf("%s\t%d\t\n", tokens[i].name, tokens[i].id);
 }
 
-void tokenCheck(int length, char digits[], char letters[])
+void tokenCheck(int length)
 {
     int var_flag = 0, dig_flag = 0;
 
@@ -853,10 +853,9 @@ void tokenCheck(int length, char digits[], char letters[])
 
 
         else{
-
-            if(contains(tokens[i].name[0], letters))
+            if(isalpha(tokens[i].name[0]))
             {
-                for(int k = 1; i < strlen(tokens[k].name); i++)
+                for(int k = 1; k < strlen(tokens[k].name); k++)
                 {
                     if(strlen(tokens[k].name) > 11)
                     {
@@ -864,8 +863,10 @@ void tokenCheck(int length, char digits[], char letters[])
                         exit(1);
                     }
 
-                    if(!contains(tokens[k].name[i], digits) && !contains(tokens[k].name[i], letters))
+                    if(!isdigit(tokens[i].name[k]) && !isalpha(tokens[i].name[k])){
+                        //printf("\n!isdigit: %d, !isalpha: %d\n", !isdigit(tokens[i].name[k]), !isalpha(tokens[i].name[k]));
                         var_flag = 1;
+                    }
                 }
 
                 if(!var_flag)
@@ -876,7 +877,7 @@ void tokenCheck(int length, char digits[], char letters[])
 
             }
 
-            else if(contains(tokens[i].name[0], digits))
+            else if(isdigit(tokens[i].name[0]))
             {
 
                 if(strlen(tokens[i].name) > 5)
@@ -885,9 +886,9 @@ void tokenCheck(int length, char digits[], char letters[])
                     exit(1);
                 }
 
-                for(int k = 1; i < strlen(tokens[i].name); i++)
+                for(int k = 1; k < strlen(tokens[i].name); k++)
                 {
-                    if(!contains(tokens[i].name[k], digits) && strlen(tokens[i].name) <= 5)
+                    if(!isdigit(tokens[i].name[k]) && strlen(tokens[i].name) <= 5)
                         dig_flag = 1;
 
 
@@ -1708,11 +1709,6 @@ void readFiles(int argc, char **argv)
 {
     //used for scanner program
     char specialChar[13] = {'+','-','*','/','(',')','=',',','.','<','>',';',':'};
-    char digits[10] = {'0','1','2', '3', '4', '5', '6', '7', '8', '9'};
-    char letters[52] = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k',
-    'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w' , 'x', 'y', 'z',
-    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O',
-    'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'};
     int token_len;
     int do_token_print = 0, do_assembly_print = 0, do_virtual_trace = 0;
 
@@ -1736,8 +1732,8 @@ void readFiles(int argc, char **argv)
 
     if(scanner_input)
     {
-        token_len = process(specialChar, scanner_input, digits, letters);
-        tokenCheck(token_len, digits, letters);
+        token_len = process(specialChar, scanner_input);
+        tokenCheck(token_len);
     }
 
     else
@@ -1804,6 +1800,4 @@ int main(int argc, char **argv)
 
     //start reading the tokens file
     readFiles(argc, argv);
-
-    printf("SUCCESSFUL!");
 }
