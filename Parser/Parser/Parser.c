@@ -75,6 +75,8 @@ Symbol *createSymbol(int kind, char *name, int val, int level, int addr);
 struct Node *insertNode(Symbol sym, struct Node *head);
 //int compareSymbols(Symbol s1, Symbol s2);
 //int destroyNode(Symbol s, struct Node *head);
+int process(char specialChar[], FILE *file)
+void tokenCheck(int length);
 void getNextToken();
 unsigned int hashValue(char *str, unsigned int len);
 int lookUp(char *name);
@@ -375,7 +377,6 @@ void virtualMachine(int print)
 // A neat function for error printing
 void error(int errNum, char *name)
 {
-    printf("Entering error function\n");
     switch(errNum)
     {
         case 1:
@@ -560,7 +561,7 @@ int contains(char c, char alpha[])
     return 0;
 }
 
-int process(char specialChar[], FILE *file, char digits[], char letters[])
+int process(char specialChar[], FILE *file)
 {
     //declare things we will use in this function
     char c1, c2;
@@ -662,7 +663,7 @@ void printTokens(int len)
         printf("%s\t%d\t\n", tokens[i].name, tokens[i].id);
 }
 
-void tokenCheck(int length, char digits[], char letters[])
+void tokenCheck(int length)
 {
     int var_flag = 0, dig_flag = 0;
 
@@ -1713,11 +1714,6 @@ void readFiles(int argc, char **argv)
 {
     //used for scanner program
     char specialChar[13] = {'+','-','*','/','(',')','=',',','.','<','>',';',':'};
-    char digits[10] = {'0','1','2', '3', '4', '5', '6', '7', '8', '9'};
-    char letters[52] = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k',
-    'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w' , 'x', 'y', 'z',
-    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O',
-    'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'};
     int token_len;
     int do_token_print = 0, do_assembly_print = 0, do_virtual_trace = 0;
 
@@ -1741,8 +1737,8 @@ void readFiles(int argc, char **argv)
 
     if(scanner_input)
     {
-        token_len = process(specialChar, scanner_input, digits, letters);
-        tokenCheck(token_len, digits, letters);
+        token_len = process(specialChar, scanner_input);
+        tokenCheck(token_len);
     }
 
     else
