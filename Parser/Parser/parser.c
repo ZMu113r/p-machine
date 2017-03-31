@@ -1,6 +1,6 @@
 /*
 Lilly Jackson
-Zack Muller
+Zachary Muller
 Aaron Hebson
 */
 
@@ -851,6 +851,11 @@ void tokenCheck(int length)
             strcpy(tokens[i].sym_name, "elsesym ");
         }
 
+        else if(strcmp(tokens[i].name, "int") == 0)
+        {
+            tokens[i].id = 34;
+            strcpy(tokens[i].sym_name, "intsym ");
+        }
 
         else{
             if(isalpha(tokens[i].name[0]))
@@ -1469,6 +1474,14 @@ void statement()
         //call statement for the if statement
         statement();
 
+        getNextToken();
+
+        if(strcmp(cur_token, "elsesym") == 0)
+        {
+            getNextToken();
+            statement();
+        }
+
     }
 
     //current token is the while symbol
@@ -1674,18 +1687,35 @@ void proc_Declaration()
 
 void block()
 {
-    //token is is constant
-    if(strcmp(cur_token, "constsym") == 0)
-       constant_Declaration();
+    int stillDeclare = 1;
 
-    //integer declaration portion
-    if(strcmp(cur_token, "varsym") == 0)
-        var_Declaration();
+    while(stillDeclare)
+    {
+        stillDeclare = 0;
+
+        //token is is constant
+        if(strcmp(cur_token, "constsym") == 0)
+        {
+            constant_Declaration();
+            stillDeclare = 1;
+        }
 
 
-    //procedure declaration
-    while(strcmp(cur_token, "procsym") == 0)
-        proc_Declaration();
+        //integer declaration portion
+        if(strcmp(cur_token, "varsym") == 0 || strcmp(cur_token, "intsym") == 0)
+        {
+            var_Declaration();
+            stillDeclare = 1;
+        }
+
+        //procedure declaration
+        while(strcmp(cur_token, "procsym") == 0)
+        {
+            stillDeclare = 1;
+            proc_Declaration();
+        }
+
+    }
 
     convertToAssembly(6, 0, 0, 4+var_total);
     statement();
