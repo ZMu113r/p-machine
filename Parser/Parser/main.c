@@ -96,6 +96,8 @@ instructions code;
 //E.G. if we store something in reg 0, then we want to make sure to not use that reg
 //until we are done using it
 int reg_count = 0;
+//the level is used to as a global variable for all instructions as well as the defining of these variables
+int level = 0;
 
 /* *** Virtual Machine Global Variables *** */
 //these are the registers used to do arithmetic
@@ -1329,7 +1331,7 @@ void statement()
 
             if(cur_token.token != beginsym && cur_token.token != readsym && cur_token.token != callsym && cur_token.token != ifsym && cur_token.token != identsym)
                if(cur_token.token != whilesym && cur_token.token != writesym && cur_token.token != semicolonsym)
-                    error(21, "");
+                   error(21, "");
 
             statement();
         }
@@ -1357,7 +1359,29 @@ void statement()
 
         statement();
 
-        code.instructions[savedIC].M = code.IC;
+        if(cur_token.token == semicolonsym)
+        {
+            getNextToken();
+
+            if(cur_token.token == elsesym)
+            {
+                int savedIC2 = code.IC;
+
+                emit(7, 0, 0, -1);
+
+                code.instructions[savedIC].M = code.IC;
+
+                getNextToken();
+
+                statement();
+
+                code.instructions[savedIC2].M = code.IC;
+            }
+
+            else
+                code.instructions[savedIC].M = code.IC;
+        }
+
     }
 
     else if(cur_token.token == whilesym)
