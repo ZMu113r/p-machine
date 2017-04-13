@@ -9,6 +9,7 @@
 #define MAX_CODE_LENGTH 500
 #define MAX_STACK_HEIGHT 2000
 #define TOTAL_REGISTERS 16
+#define MAX_PROCEDURES 99
 
 //this will be used to store tokens that meet grammar requirements
 typedef struct Symbol
@@ -16,7 +17,7 @@ typedef struct Symbol
     int kind;             //const = 1, var = 2, proc = 3
     char name[20];        //name up to 11 characters
     int val;              //number in ASCII
-    int level;            //L level
+    int level;            //L
     int addr;             //M address
 } Symbol;
 
@@ -70,6 +71,20 @@ typedef struct instructions
     int IC;
 } instructions;
 
+//this struct is used to store total number of procedures and there locations
+typedef struct
+{
+    int savedProc[MAX_PROCEDURES];
+    int count;
+} savedProcIC;
+
+//this stores the procedure names
+typedef struct
+{
+    char array[MAX_PROCEDURES][IDENT_LIMIT];
+    int count;
+} procedure_store;
+
 //file used by all parts programs
 FILE *fp;
 
@@ -86,18 +101,23 @@ char tokens[MAX_CODE_LENGTH][IDENT_LIMIT];
 this_token cur_token;
 //this is the symbol table (hash table)
 hash symbol_table[SYMBOL_LIMIT];
-//this keeps track of the total amount of declared variables
-int var_total = 0;
 //this next global variables i the address counter for the symbol table
-int addr = 4;
+int addr;
 //this represents where the instruction count and instructions will be stored
 instructions code;
 //this will keep track of whcih registers are being used and which are not when emitting
 //E.G. if we store something in reg 0, then we want to make sure to not use that reg
 //until we are done using it
 int reg_count = 0;
-//the level is used to as a global variable for all instructions as well as the defining of these variables
-int level = 0;
+//the F is used to as a global variable for all instructions as well as the defining of these variables
+int level;
+//this is the current lexigraphical level
+int lex_level;
+//this is to indicate when we are inside main to properly
+//calibrate the procedure jumps
+int start_main = 0;
+//this is used to saved positions of the procedures
+savedProcIC saved;
 
 /* *** Virtual Machine Global Variables *** */
 //these are the registers used to do arithmetic
@@ -168,10 +188,10 @@ unsigned int hashValue(char *str, unsigned int len);
 
 //this looks something up the identifier in the symbol table
 //returns 1 if found and 0 otherwise
-int lookUp(char *name);
+int lookUp(char *name, int isDecl);
 
 //looks up a particular symbol and returns it
-struct Node *lookUpSym(char *name);
+struct Node *lookUpSym(char *name, int isDecl);
 
 //inserts a symbol into the hash table
 void insertHash(int kind, char *name, int value, int level, int addr);
@@ -574,7 +594,7 @@ unsigned int hashValue(char *str, unsigned int len)
    return result%SYMBOL_LIMIT;
 }
 
-int lookUp(char *name)
+int lookUp(char *name, int isDecl)
 {
     int hash_val = hashValue(name, strlen(name));
 
@@ -583,8 +603,20 @@ int lookUp(char *name)
     if(temp == NULL)
         return -1;
 
-    while(strcmp(temp->sym.name, name) != 0)
+    while(1)
     {
+        if(isDecl)
+        {
+            if(strcmp(temp->sym.name, name) == 0 && temp->sym.level == level)
+            break;
+        }
+
+        else
+        {
+            if(strcmp(temp->sym.name, name) == 0 && temp->sym.level <= level)
+            break;
+        }
+
         temp = temp->next;
 
         if(temp == NULL)
@@ -594,34 +626,55 @@ int lookUp(char *name)
     return 0;
 }
 
-struct Node *lookUpSym(char *name)
+struct Node *lookUpSym(char *name, int isDecl)
 {
     struct Node *temp;
 
-    if(lookUp(name) < 0)
+    if(lookUp(name, isDecl) < 0)
         error(15, name);
-
 
     int hash = hashValue(name, strlen(name));
 
     temp = symbol_table[hash].head;
 
-    while(strcmp(temp->sym.name, name) != 0)
+    if(isDecl)
+    {
+        while(strcmp(temp->sym.name, name) != 0 && temp->sym.level == level)
         temp = temp->next;
+    }
+
+    else
+    {
+        while(strcmp(temp->sym.name, name) != 0 && temp->sym.level == level)
+        {
+            if(temp != NULL)
+                temp =  temp->next;
+            else break;
+        }
+
+        if(temp != NULL)
+            return temp;
+
+        temp = symbol_table[hash].head;
+
+        while(strcmp(temp->sym.name, name) != 0 && temp->sym.level <= level)
+        temp = temp->next;
+    }
 
     return temp;
 }
 
 void insertHash(int kind, char *name, int value, int level, int addr)
 {
-    var_total++;
-
     Symbol sym = *createSymbol(kind, name, value, level, addr);
 
     int hash = hashValue(sym.name, strlen((sym.name)));
 
-    if(lookUp(name) == 0)
-        error(19, name);
+    if(lookUp(name, 1) == 0)
+        error(22, name);
+
+    if(kind == 2 || kind == 3)
+        sym.level = level;
 
     symbol_table[hash].head = insertNode(sym, symbol_table[hash].head);
 }
@@ -766,6 +819,12 @@ void error(int error_num, char *name)
     {
         printf("Superfluous semicolon found.\n");
         exit(21);
+    }
+
+    else if(error_num == 22)
+    {
+        printf("%s is already declared.\n", name);
+        exit(22);
     }
 }
 
@@ -1117,15 +1176,18 @@ void factor()
 {
     if(cur_token.token == identsym)
     {
-        if(lookUpSym(cur_token.ident)->sym.kind == 1)
+        if(lookUpSym(cur_token.ident, 0)->sym.kind == 1)
         {
-            emit(1, reg_count, 0, lookUpSym(cur_token.ident)->sym.val);
+            emit(1, reg_count, 0, lookUpSym(cur_token.ident, 0)->sym.val);
             changeRegCount(1);
         }
 
-        else if(lookUpSym(cur_token.ident)->sym.kind == 2)
+        else if(lookUpSym(cur_token.ident, 0)->sym.kind == 2)
         {
-            emit(3, reg_count, 0, lookUpSym(cur_token.ident)->sym.addr);
+            if(start_main)
+                emit(3, reg_count, 0, lookUpSym(cur_token.ident, 0)->sym.addr+1);
+            else
+                emit(3, reg_count, level - lookUpSym(cur_token.ident, 0)->sym.level, lookUpSym(cur_token.ident, 0)->sym.addr+1);
             changeRegCount(1);
         }
 
@@ -1294,7 +1356,7 @@ void statement()
 
         getNextToken();
 
-        if(lookUpSym(temp)->sym.kind == 1)
+        if(lookUpSym(temp, 0)->sym.kind == 1)
             error(18, "");
 
         if(cur_token.token != becomessym)
@@ -1306,7 +1368,10 @@ void statement()
 
         changeRegCount(0);
 
-        emit(4, reg_count, 0, lookUpSym(temp)->sym.addr);
+        //if(start_main)
+            //emit(4, reg_count, 0, lookUpSym(temp, 0)->sym.addr+1);
+       // else
+            emit(4, reg_count, level-lookUpSym(temp, 0)->sym.level, lookUpSym(temp, 0)->sym.addr+1);
     }
 
     else if(cur_token.token == callsym)
@@ -1315,6 +1380,12 @@ void statement()
 
         if(cur_token.token != identsym)
             error(8, "");
+
+        searchReserves();
+
+        emit(5, 0, level, lookUpSym(cur_token.ident, 0)->sym.addr);
+
+        lex_level++;
 
         getNextToken();
     }
@@ -1359,29 +1430,25 @@ void statement()
 
         statement();
 
-        if(cur_token.token == semicolonsym)
+        if(array[cur_token.token_cnt] == elsesym)
         {
             getNextToken();
 
-            if(cur_token.token == elsesym)
-            {
-                int savedIC2 = code.IC;
+            int savedIC2 = code.IC;
 
-                emit(7, 0, 0, -1);
+            emit(7, 0, 0, -1);
 
-                code.instructions[savedIC].M = code.IC;
+            code.instructions[savedIC].M = code.IC;
 
-                getNextToken();
+            getNextToken();
 
-                statement();
+            statement();
 
-                code.instructions[savedIC2].M = code.IC;
-            }
-
-            else
-                code.instructions[savedIC].M = code.IC;
+            code.instructions[savedIC2].M = code.IC;
         }
 
+        else
+            code.instructions[savedIC].M = code.IC;
     }
 
     else if(cur_token.token == whilesym)
@@ -1419,24 +1486,32 @@ void statement()
 
         if(temp == writesym)
         {
-            if(lookUpSym(cur_token.ident)->sym.kind == 1)
-                emit(1, reg_count, 0, lookUpSym(cur_token.ident)->sym.val);
+            if(lookUpSym(cur_token.ident, 0)->sym.kind == 1)
+                emit(1, reg_count, 0, lookUpSym(cur_token.ident, 0)->sym.val);
             else
-                emit(3, reg_count, 0, lookUpSym(cur_token.ident)->sym.addr);
+            {
+                if(start_main)
+                    emit(3, reg_count, 0, lookUpSym(cur_token.ident, 0)->sym.addr+1);
+                else
+                    emit(3, reg_count, level - lookUpSym(cur_token.ident, 0)->sym.level, lookUpSym(cur_token.ident, 0)->sym.addr+1);
+            }
 
             emit(9, reg_count, 0, 1);
         }
 
         else
         {
-            if(lookUpSym(cur_token.ident)->sym.kind == 1)
+            if(lookUpSym(cur_token.ident, 0)->sym.kind == 1)
                 error(18 ,"");
 
             emit(10, reg_count, 0, 2);
 
             changeRegCount(1);
 
-            emit(4, reg_count-1, 0, lookUpSym(cur_token.ident)->sym.addr);
+            if(start_main)
+                emit(4, reg_count-1, 0, lookUpSym(cur_token.ident, 0)->sym.addr+1);
+            else
+                emit(4, reg_count-1, level-lookUpSym(cur_token.ident, 0)->sym.level, lookUpSym(cur_token.ident, 0)->sym.addr+1);
 
             changeRegCount(0);
         }
@@ -1469,6 +1544,7 @@ void constantDeclaration()
         insertHash(1, cur_token.ident, cur_token.number, 0, 0);
 
         getNextToken();
+
     } while(cur_token.token == commasym);
 
     if(cur_token.token != semicolonsym)
@@ -1478,8 +1554,9 @@ void constantDeclaration()
 
 }
 
-void varDeclaration()
+int varDeclaration()
 {
+    int val = 0;
     do
     {
         getNextToken();
@@ -1491,7 +1568,11 @@ void varDeclaration()
 
         getNextToken();
 
-        insertHash(2, cur_token.ident, 0, 0, addr++);
+        insertHash(2, cur_token.ident, 0, level, addr);
+
+        val++;
+
+        addr++;
 
     } while(cur_token.token == commasym);
 
@@ -1499,9 +1580,11 @@ void varDeclaration()
         error(6, "");
 
     getNextToken();
+
+    return val;
 }
 
-void procDeclaration()
+int procDeclaration(int jump_address)
 {
     while(cur_token.token == procsym)
     {
@@ -1514,14 +1597,18 @@ void procDeclaration()
 
         searchReserves();
 
-        insertHash(3, cur_token.ident, 0, 0, addr++);
+        insertHash(3, cur_token.ident, 0, level, jump_address+1);
 
         if(cur_token.token != semicolonsym)
             error(6, "");
 
         getNextToken();
 
+        level++;
+
         block();
+
+        emit(2, 0, 0, 0);
 
         if(cur_token.token != semicolonsym)
             error(6, "");
@@ -1532,22 +1619,38 @@ void procDeclaration()
 
 void block()
 {
+    addr = 3;
+    int var_total = 4;
+    int proc_x;
+
+
+    int jump_to = code.IC;
+
+    emit(7, 0, 0, 0);
+
     if(cur_token.token == constsym)
         constantDeclaration();
 
     if(cur_token.token == varsym || cur_token.token == intsym)
-        varDeclaration();
+        var_total += varDeclaration();
 
     if(cur_token.token == procsym)
-        procDeclaration();
+        procDeclaration(jump_to);
 
-    emit(6, 0, 0, 4+var_total);
+    code.instructions[jump_to].M = code.IC;
+
+    if(jump_to == 0)
+        start_main = 1;
+
+    emit(6, 0, 0, var_total);
 
     statement();
+
+    lex_level--;
 }
 
-void program(int print_assembly)
-{
+void program(int print_assembly){
+
     getNextToken();
 
     block();
@@ -1573,8 +1676,11 @@ int main(int argc, char **argv)
     fp = fopen("input1.txt", "r");
     int print_lexemes = 0, print_assembly = 0, print_stack = 0;
 
-    //set the instruction count to 0
+    //set the instruction count to 0 and procedure count to 0
     code.IC = 0;
+    saved.count = 0;
+    level = 1;
+    lex_level = 1;
 
     for(int i = 1; i < argc; i++)
     {
@@ -1596,7 +1702,7 @@ int main(int argc, char **argv)
 
     initializeToken();
 
-    program(print_assembly);
+    program(1);
 
     virtualMachine(print_stack);
 }
