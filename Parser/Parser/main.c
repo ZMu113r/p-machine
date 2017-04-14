@@ -10,6 +10,7 @@
 #define MAX_STACK_HEIGHT 2000
 #define TOTAL_REGISTERS 16
 #define MAX_PROCEDURES 99
+#define MAX_LEVEL 3
 
 //this will be used to store tokens that meet grammar requirements
 typedef struct Symbol
@@ -110,14 +111,20 @@ instructions code;
 //until we are done using it
 int reg_count = 0;
 //the F is used to as a global variable for all instructions as well as the defining of these variables
-int level;
+int level = 0;
 //this is the current lexigraphical level
-int lex_level;
+int lex_level = 0;
 //this is to indicate when we are inside main to properly
 //calibrate the procedure jumps
 int start_main = 0;
 //this is used to saved positions of the procedures
 savedProcIC saved;
+//first, follow and other sets used for error recovery
+token_type declbegsys[3] = {constsym, varsym, procsym};
+token_type statbegsys[4] = {beginsym, callsym, ifsym, whilesym};
+token_type facebegsys[3] = {identsym, numbersym, lparentsym};
+//total error
+int total_error = 0;
 
 /* *** Virtual Machine Global Variables *** */
 //these are the registers used to do arithmetic
@@ -143,10 +150,10 @@ void printTokens(int tokenCount);
 void getNextToken();
 
 //this starts the parser
-void program();
+void program(int print_assembly);
 
 //deals with declaration and calls statement
-void block();
+void block(token_type *fsys, int size);
 
 //this deals with various amounts of things
 //this includes the beginnings of assignments
@@ -154,24 +161,24 @@ void block();
 //any begin to end block
 //if statements
 //while loops
-void statement();
+void statement(token_type *fsys, int size);
 
 //this function just checks the current token to see if it is a relation
 //this is used only in condition
 int checkRelation();
 
 //this deals with any sort of if or while condition
-void condition();
+void condition(token_type *fsys, int size);
 
 //this deals with any number of subtraction or addition
-void expression();
+void expression(token_type *fsys, int size);
 
 //this function deals with any number of multiplication or division
-void term();
+void term(token_type *fsys, int size);
 
 //this function is the bottom most function of the parser and deals
 //with resolving identifiers, numbers, and parenthesis
-void factor();
+void factor(token_type *fsys, int size);
 
 //this creates a node given a symbol
 struct Node *createNode(Symbol s);
@@ -216,7 +223,58 @@ int findBase(int L, int base, int stack[]);
 //this function focuses on returning a string in accordance to a OP code
 char * getInstructName(int opcode);
 
+//this is the function that allows for error recovery
+//we will pass the enum of which function we are in as well
+//as the error number
+//first set and follow set of each function are stored in here, and will be accessed
+//depending on the function
+void test(token_type *s1, token_type *s2, int size1, int size2, int error_num, char *name);
+//this function will take a set and an element of that set, return 1
+//if the element is in the set and zero otherwise
+int isElement(token_type elem, token_type *set, int size);
+//this function takes two array's and unions them together
+//luckily the array sizes will be really small, so a naive approach is used
+token_type *unionTok(token_type *s1, token_type *s2, int size1, int size2);
+
 /* *** The start of the actual program *** */
+
+token_type *unionTok(token_type *s1, token_type *s2, int size1, int size2)
+{
+    token_type *newArray = (token_type*) malloc((size1 + size2)*sizeof(token_type));
+
+    int i, j;
+
+    for(i = 0; i < size1; i++)
+        newArray[i] = s1[i];
+
+    for(j = 0; j < size2; j++)
+        newArray[i+j] = s2[j];
+
+    return newArray;
+}
+
+int isElement(token_type elem, token_type *set, int size)
+{
+    for(int i = 0; i < size; i++)
+    {
+        if(elem == set[i])
+            return 1;
+    }
+
+    return 0;
+}
+void test(token_type *s1, token_type *s2, int size1, int size2, int error_num, char *name)
+{
+
+    if(!isElement(cur_token.token, s1, size1))
+    {
+        error(error_num, name);
+
+        while(!isElement(cur_token.token, s1,  size1) &&  !isElement(cur_token.token, s2,  size2))
+            getNextToken();
+    }
+}
+
 char * getInstructName(int opcode){
     switch(opcode) {
         case 1:
@@ -333,7 +391,6 @@ void virtualMachine(int print)
 
             case 4:
                 stack[findBase(IR.L, BP, stack) + IR.M] = registers[IR.R];
-
                 break;
 
             case 5:
@@ -658,15 +715,17 @@ struct Node *lookUpSym(char *name, int isDecl)
         temp = symbol_table[hash].head;
 
         while(strcmp(temp->sym.name, name) != 0 && temp->sym.level <= level)
-        temp = temp->next;
+        {
+            temp = temp->next;
+        }
     }
 
     return temp;
 }
 
-void insertHash(int kind, char *name, int value, int level, int addr)
+void insertHash(int kind, char *name, int value, int lev, int addr)
 {
-    Symbol sym = *createSymbol(kind, name, value, level, addr);
+    Symbol sym = *createSymbol(kind, name, value, lev, addr);
 
     int hash = hashValue(sym.name, strlen((sym.name)));
 
@@ -674,7 +733,7 @@ void insertHash(int kind, char *name, int value, int level, int addr)
         error(22, name);
 
     if(kind == 2 || kind == 3)
-        sym.level = level;
+        sym.level = lev;
 
     symbol_table[hash].head = insertNode(sym, symbol_table[hash].head);
 }
@@ -685,6 +744,7 @@ void getNextToken()
 
     if(cur_token.token == identsym)
         strcpy(cur_token.ident,tokens[cur_token.token_cnt]);
+
 
     else if(cur_token.token == numbersym)
         cur_token.number = atoi(tokens[cur_token.token_cnt]);
@@ -708,124 +768,81 @@ void error(int error_num, char *name)
     }
 
     else if(error_num == 2)
-    {
         printf("Period symbol Missing.\n");
-        exit(2);
-    }
 
     else if(error_num == 3)
-    {
         printf("Identifier symbol is missing after declaration.\n");
-        exit(3);
-    }
 
     else if(error_num == 4)
-    {
         printf("Equal sign required for constant declaration.\n");
-        exit(4);
-    }
 
     else if(error_num == 5)
-    {
         printf("Number should follow a constant declaration.\n");
-        exit(5);
-    }
 
     else if(error_num == 6)
-    {
         printf("Semicolon is missing.\n");
-        exit(6);
-    }
 
     else if(error_num == 7)
-    {
         printf("Becomes symbol missing after identifier.\n");
-        exit(7);
-    }
 
     else if(error_num == 8)
-    {
         printf("Identifier missing for call statement.\n");
-        exit(8);
-    }
 
     else if(error_num == 9)
-    {
-        printf("End symbol messing for begins symbol.\n");
-        exit(9);
-    }
+        printf("End symbol missing for begins symbol.\n");
 
     else if(error_num == 10)
-    {
         printf("Then symbol missing after preceding if.\n");
-        exit(10);
-    }
 
     else if(error_num == 11)
-    {
         printf("Do symbol missing after preceding while.\n");
-        exit(11);
-    }
 
     else if(error_num == 12)
-    {
         printf("A relation must follow the identifier in a condition.\n");
-        exit(12);
-    }
 
     else if(error_num == 13)
-    {
         printf("Right parenthesis is needed following a left parenthesis\n");
-        exit(13);
-    }
 
     else if(error_num == 14)
-    {
         printf("Number or identifier expected.\n");
-        exit(14);
-    }
 
     else if(error_num == 15)
-    {
         printf("The identifier %s is not declared\n", name);
-        exit(15);
-    }
 
     else if(error_num == 16)
-    {
         printf("An identifier is a reserved word.\n");
-        exit(16);
-    }
 
     else if(error_num == 17)
-    {
         printf("The code is too long to run.\n");
-        exit(17);
-    }
 
     else if(error_num == 18)
-    {
         printf("Constant values cannot be assigned values.\n");
-        exit(18);
-    }
 
     else if(error_num == 19)
-    {
         printf("Identifier must follow a read or write symbol.\n");
-        exit(19);
-    }
 
     else if(error_num == 21)
-    {
         printf("Superfluous semicolon found.\n");
-        exit(21);
-    }
 
     else if(error_num == 22)
-    {
         printf("%s is already declared.\n", name);
-        exit(22);
-    }
+
+    else if(error_num == 23)
+        printf("The preceding factor cannot begin with this symbol.\n");
+
+    else if(error_num == 24)
+        printf("An expression cannot begin with this symbol.\n");
+
+    else if(error_num == 25)
+        printf("Incorrect symbol following statement.\n");
+
+    else if(error_num == 26)
+        printf("Incorrect symbol after statement part in block.\n");
+
+    else if(error_num == 27)
+        printf("Too many lexicographical levels.\n");
+
+    total_error++;
 }
 
 //iterates through the input file and counts the number of lines
@@ -1172,58 +1189,78 @@ int matchTokenTypes(char tokens[MAX_CODE_LENGTH][IDENT_LIMIT], int tokenCount){
     return 0;
 }
 
-void factor()
+void factor(token_type *fsys, int size)
 {
-    if(cur_token.token == identsym)
+    test(facebegsys, fsys, 3, size, 24, "");
+
+    while(isElement(cur_token.token, facebegsys, 3))
     {
-        if(lookUpSym(cur_token.ident, 0)->sym.kind == 1)
+
+        if(cur_token.token == identsym)
         {
-            emit(1, reg_count, 0, lookUpSym(cur_token.ident, 0)->sym.val);
-            changeRegCount(1);
+            if(lookUpSym(cur_token.ident, 0)->sym.kind == 1)
+            {
+                emit(1, reg_count, 0, lookUpSym(cur_token.ident, 0)->sym.val);
+                changeRegCount(1);
+            }
+
+            else if(lookUpSym(cur_token.ident, 0)->sym.kind == 2)
+            {
+                if(start_main)
+                    emit(3, reg_count, 0, lookUpSym(cur_token.ident, 0)->sym.addr+1);
+                else
+                    emit(3, reg_count, level - lookUpSym(cur_token.ident, 0)->sym.level, lookUpSym(cur_token.ident, 0)->sym.addr+1);
+
+                changeRegCount(1);
+            }
+
+            getNextToken();
         }
 
-        else if(lookUpSym(cur_token.ident, 0)->sym.kind == 2)
+        else if(cur_token.token == numbersym)
         {
-            if(start_main)
-                emit(3, reg_count, 0, lookUpSym(cur_token.ident, 0)->sym.addr+1);
-            else
-                emit(3, reg_count, level - lookUpSym(cur_token.ident, 0)->sym.level, lookUpSym(cur_token.ident, 0)->sym.addr+1);
+            emit(1, reg_count, 0, cur_token.number);
+
             changeRegCount(1);
+
+            getNextToken();
         }
 
-        getNextToken();
+
+        else if(cur_token.token == lparentsym)
+        {
+            getNextToken();
+
+            token_type temp[] = {rparentsym};
+
+            token_type *combined = unionTok(fsys, temp, size, 1);
+
+            expression(combined, size+1);
+
+            free(combined);
+
+            if(cur_token.token != rparentsym)
+                error(13, "");
+
+            getNextToken();
+        }
+
+        else
+            error(14, "");
+
+        token_type temp[] = {lparentsym};
+
+        test(fsys, temp, size, 1, 23, "");
     }
-
-
-    else if(cur_token.token == numbersym)
-    {
-        emit(1, reg_count, 0, cur_token.number);
-
-        changeRegCount(1);
-
-        getNextToken();
-    }
-
-
-    else if(cur_token.token == lparentsym)
-    {
-        getNextToken();
-
-        expression();
-
-        if(cur_token.token != rparentsym)
-            error(13, "");
-
-        getNextToken();
-    }
-
-    else
-        error(14, "");
 }
 
-void term()
+void term(token_type *fsys, int size)
 {
-    factor();
+    token_type temp[] = {multsym, slashsym};
+
+    token_type *combined = unionTok(fsys, temp, size, 2);
+
+    factor(combined, size+2);
 
     while(cur_token.token == multsym || cur_token.token == slashsym)
     {
@@ -1231,7 +1268,7 @@ void term()
 
         getNextToken();
 
-        factor();
+        factor(combined, size+2);
 
         changeRegCount(0);
 
@@ -1242,12 +1279,18 @@ void term()
             emit(16, reg_count-1, reg_count-1, reg_count);
     }
 
+    free(combined);
+
 }
-void expression()
+void expression(token_type *fsys, int size)
 {
     int isNeg = 0;
 
     token_type temp;
+
+    token_type temp2[] = {plussym, minussym};
+
+    token_type *combined = unionTok(fsys, temp2, size, 2);
 
     if(cur_token.token == plussym || cur_token.token == minussym)
     {
@@ -1258,7 +1301,7 @@ void expression()
         getNextToken();
     }
 
-    term();
+    term(combined, size+2);
 
     if(isNeg)
     {
@@ -1274,7 +1317,7 @@ void expression()
 
         getNextToken();
 
-        term();
+        term(combined, size+2);
 
         changeRegCount(0);
 
@@ -1283,6 +1326,8 @@ void expression()
         else
             emit(14, reg_count-1, reg_count-1, reg_count);
     }
+
+    free(combined);
 }
 
 int checkRelation()
@@ -1303,13 +1348,13 @@ int checkRelation()
         return 0;
 }
 
-void condition()
+void condition(token_type *fsys, int size)
 {
     if(cur_token.token == oddsym)
     {
         getNextToken();
 
-        expression();
+        expression(fsys, size);
 
         changeRegCount(0);
 
@@ -1318,7 +1363,13 @@ void condition()
 
     else
     {
-        expression();
+        token_type temp1[] = {eqsym, neqsym, lessym, gtrsym, leqsym, geqsym};
+
+        token_type *combined = unionTok(fsys, temp1, size, 6);
+
+        expression(combined, size+6);
+
+        free(combined);
 
         if(!checkRelation())
             error(12, "");
@@ -1327,7 +1378,7 @@ void condition()
 
         getNextToken();
 
-        expression();
+        expression(fsys, size);
 
         changeRegCount(0);
 
@@ -1346,7 +1397,7 @@ void condition()
     }
 }
 
-void statement()
+void statement(token_type *fsys, int size)
 {
     if(cur_token.token == identsym)
     {
@@ -1364,14 +1415,14 @@ void statement()
 
         getNextToken();
 
-        expression();
+        expression(fsys, size);
 
         changeRegCount(0);
 
-        //if(start_main)
-            //emit(4, reg_count, 0, lookUpSym(temp, 0)->sym.addr+1);
-       // else
-            emit(4, reg_count, level-lookUpSym(temp, 0)->sym.level, lookUpSym(temp, 0)->sym.addr+1);
+        if(lex_level - lookUpSym(temp, 0)->sym.level < 0)
+            emit(4, reg_count, 0, lookUpSym(temp, 0)->sym.addr+1);
+        else
+            emit(4, reg_count, level - lookUpSym(temp, 0)->sym.level, lookUpSym(temp, 0)->sym.addr+1);
     }
 
     else if(cur_token.token == callsym)
@@ -1385,8 +1436,6 @@ void statement()
 
         emit(5, 0, level, lookUpSym(cur_token.ident, 0)->sym.addr);
 
-        lex_level++;
-
         getNextToken();
     }
 
@@ -1394,7 +1443,11 @@ void statement()
     {
         getNextToken();
 
-        statement();
+        token_type temp[] = {semicolonsym, endsym};
+
+        token_type *combined = unionTok(fsys, temp, size, 2);
+
+        statement(combined, size+2);
 
         while(cur_token.token == semicolonsym)
         {
@@ -1404,20 +1457,26 @@ void statement()
                if(cur_token.token != whilesym && cur_token.token != writesym && cur_token.token != semicolonsym)
                    error(21, "");
 
-            statement();
+            statement(combined, size+2);
         }
 
         if(cur_token.token != endsym)
             error(9, "");
 
         getNextToken();
+
+        free(combined);
     }
 
     else if(cur_token.token == ifsym)
     {
         getNextToken();
 
-        condition();
+        token_type temp[] = {thensym, dosym};
+
+        token_type *combined = unionTok(fsys, temp, size, 2);
+
+        condition(combined, size+2);
 
         int savedIC = code.IC;
 
@@ -1428,7 +1487,7 @@ void statement()
 
         getNextToken();
 
-        statement();
+        statement(fsys, size);
 
         if(array[cur_token.token_cnt] == elsesym)
         {
@@ -1442,7 +1501,7 @@ void statement()
 
             getNextToken();
 
-            statement();
+            statement(fsys, size);
 
             code.instructions[savedIC2].M = code.IC;
         }
@@ -1453,11 +1512,17 @@ void statement()
 
     else if(cur_token.token == whilesym)
     {
+        token_type temp[] = {dosym};
+
+        token_type *combined = unionTok(fsys, temp, size, 1);
+
         getNextToken();
 
         int savedIC1 = code.IC;
 
-        condition();
+        condition(combined, size+1);
+
+        free(combined);
 
         int savedIC2 = code.IC;
 
@@ -1468,7 +1533,7 @@ void statement()
 
         getNextToken();
 
-        statement();
+        statement(fsys, size);
 
         emit(7, 0, 0, savedIC1);
 
@@ -1490,7 +1555,7 @@ void statement()
                 emit(1, reg_count, 0, lookUpSym(cur_token.ident, 0)->sym.val);
             else
             {
-                if(start_main)
+                if(lex_level - lookUpSym(cur_token.ident, 0)->sym.level < 0)
                     emit(3, reg_count, 0, lookUpSym(cur_token.ident, 0)->sym.addr+1);
                 else
                     emit(3, reg_count, level - lookUpSym(cur_token.ident, 0)->sym.level, lookUpSym(cur_token.ident, 0)->sym.addr+1);
@@ -1511,13 +1576,17 @@ void statement()
             if(start_main)
                 emit(4, reg_count-1, 0, lookUpSym(cur_token.ident, 0)->sym.addr+1);
             else
-                emit(4, reg_count-1, level-lookUpSym(cur_token.ident, 0)->sym.level, lookUpSym(cur_token.ident, 0)->sym.addr+1);
+                emit(4, reg_count-1, level - lookUpSym(cur_token.ident, 0)->sym.level, lookUpSym(cur_token.ident, 0)->sym.addr+1);
 
             changeRegCount(0);
         }
 
         getNextToken();
     }
+
+    token_type temp[] = {};
+
+    test(fsys, temp, size, 0, 25, "");
 }
 
 void constantDeclaration()
@@ -1561,14 +1630,14 @@ int varDeclaration()
     {
         getNextToken();
 
-        searchReserves();
-
         if(cur_token.token != identsym)
             error(3, "");
 
+        searchReserves(cur_token.ident);
+
         getNextToken();
 
-        insertHash(2, cur_token.ident, 0, level, addr);
+        insertHash(2, cur_token.ident, 0, lex_level, addr);
 
         val++;
 
@@ -1584,7 +1653,7 @@ int varDeclaration()
     return val;
 }
 
-int procDeclaration(int jump_address)
+int procDeclaration(int jump_address, token_type *fsys, int size)
 {
     while(cur_token.token == procsym)
     {
@@ -1597,7 +1666,7 @@ int procDeclaration(int jump_address)
 
         searchReserves();
 
-        insertHash(3, cur_token.ident, 0, level, jump_address+1);
+        insertHash(3, cur_token.ident, 0, lex_level, jump_address+1);
 
         if(cur_token.token != semicolonsym)
             error(6, "");
@@ -1606,7 +1675,15 @@ int procDeclaration(int jump_address)
 
         level++;
 
-        block();
+        lex_level++;
+
+        token_type temp[] = {semicolonsym};
+
+        fsys = unionTok(fsys, temp, size, 1);
+
+        block(fsys, size+1);
+
+        lex_level--;
 
         emit(2, 0, 0, 0);
 
@@ -1617,12 +1694,14 @@ int procDeclaration(int jump_address)
     }
 }
 
-void block()
+void block(token_type *fsys, int size)
 {
     addr = 3;
     int var_total = 4;
     int proc_x;
 
+    if(lex_level > MAX_LEVEL)
+        error(27, "");
 
     int jump_to = code.IC;
 
@@ -1635,7 +1714,7 @@ void block()
         var_total += varDeclaration();
 
     if(cur_token.token == procsym)
-        procDeclaration(jump_to);
+        procDeclaration(jump_to, fsys, size);
 
     code.instructions[jump_to].M = code.IC;
 
@@ -1644,16 +1723,30 @@ void block()
 
     emit(6, 0, 0, var_total);
 
-    statement();
+    token_type temp[] = {semicolonsym, endsym};
 
-    lex_level--;
+    token_type *combined = unionTok(fsys, temp, size, 2);
+
+    statement(combined, size + 2);
+
+    token_type temp2[] = {};
+
+    test(combined, temp2, size, 0, 26, "");
+
+    free(combined);
 }
 
 void program(int print_assembly){
 
     getNextToken();
 
-    block();
+    token_type temp[1] = {periodsym};
+
+    token_type *combined = unionTok(temp, unionTok(declbegsys, statbegsys, 3, 4), 1, 7);
+
+    block(combined, 7);
+
+    free(combined);
 
     if(cur_token.token != periodsym)
         error(2, "");
@@ -1679,8 +1772,6 @@ int main(int argc, char **argv)
     //set the instruction count to 0 and procedure count to 0
     code.IC = 0;
     saved.count = 0;
-    level = 1;
-    lex_level = 1;
 
     for(int i = 1; i < argc; i++)
     {
@@ -1702,7 +1793,9 @@ int main(int argc, char **argv)
 
     initializeToken();
 
-    program(1);
+    program(print_assembly);
 
     virtualMachine(print_stack);
+
+    printf("\n%d error(s) where detected.\n", total_error);
 }
